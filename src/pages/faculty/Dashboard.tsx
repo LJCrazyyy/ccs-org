@@ -1,0 +1,55 @@
+import React from 'react';
+import { Users, BarChart3, BookOpen, FileText } from 'lucide-react';
+import { mockClasses } from '../../lib/constants';
+
+export const FacultyDashboard: React.FC = () => {
+  const stats = [
+    { label: 'Classes Teaching', value: mockClasses.length, icon: Users, color: 'bg-blue-500' },
+    { label: 'Total Students', value: mockClasses.reduce((sum, c) => sum + c.students, 0), icon: BarChart3, color: 'bg-green-500' },
+    { label: 'Course Materials', value: 12, icon: BookOpen, color: 'bg-purple-500' },
+    { label: 'Research Papers', value: 5, icon: FileText, color: 'bg-orange-500' },
+  ];
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-800">Faculty Dashboard</h1>
+        <p className="text-gray-600 mt-2">Welcome to your teaching portal</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.label} className="card">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm">{stat.label}</p>
+                  <p className="text-3xl font-bold text-gray-800 mt-2">{stat.value}</p>
+                </div>
+                <div className={`${stat.color} p-3 rounded-lg`}>
+                  <Icon className="text-white" size={24} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="card">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">My Classes</h2>
+        <div className="space-y-3">
+          {mockClasses.map((cls) => (
+            <div key={cls.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100">
+              <div>
+                <p className="font-semibold text-gray-800">{cls.code} - {cls.name}</p>
+                <p className="text-sm text-gray-600">Section {cls.section} • {cls.students} students</p>
+              </div>
+              <span className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full">{cls.schedule}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
