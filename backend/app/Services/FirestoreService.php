@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use Google\Cloud\Firestore\FirestoreClient;
+use Kreait\Firebase\Factory;
 
 class FirestoreService
 {
@@ -10,10 +10,8 @@ class FirestoreService
 
     public function __construct()
     {
-        $this->firestore = new FirestoreClient([
-            'projectId' => env('FIREBASE_PROJECT_ID'),
-            'keyFilePath' => config('firebase.credentials'),
-        ]);
+        $factory = (new Factory())->withServiceAccount(config('firebase.credentials'));
+        $this->firestore = $factory->createFirestore()->database();
     }
 
     public function getCollection(string $collection)

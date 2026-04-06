@@ -20,10 +20,10 @@ Route::get('/', function () {
 
 Route::get('/firebase-test', function () {
     try {
-        $firestore = Firebase::firestore();
-        // Test by listing collections or something simple
-        $collections = $firestore->listCollections();
-        return 'Firebase connected! Collections: ' . count($collections);
+        $firestoreService = new \App\Services\FirestoreService();
+        // Test connection by trying to get a collection
+        $testCollection = $firestoreService->getCollection('_test');
+        return 'Firebase connected successfully!';
     } catch (\Exception $e) {
         return 'Firebase error: ' . $e->getMessage();
     }
