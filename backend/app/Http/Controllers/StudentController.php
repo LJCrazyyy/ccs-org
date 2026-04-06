@@ -34,8 +34,34 @@ class StudentController extends Controller
         };
     }
 
+    private function normalizeDelimitedValue(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('trim', $value)));
+        }
+
+        if (is_string($value)) {
+            return array_values(array_filter(array_map('trim', preg_split('/[,;]+/', $value))));
+        }
+
+        return [];
+    }
+
+    private function formatDelimitedValue(mixed $value): string
+    {
+        $values = $this->normalizeDelimitedValue($value);
+        return implode(', ', $values);
+    }
+
     private function mapStudentForFrontend(Student $student): array
     {
+        $profile = is_array($student->profile)
+            ? $student->profile
+            : (json_decode($student->profile ?? '', true) ?: []);
+        $skills = $this->normalizeDelimitedValue($profile['skills'] ?? []);
+        $organizations = $this->normalizeDelimitedValue($profile['organizations'] ?? []);
+        $activities = $this->normalizeDelimitedValue($profile['activities'] ?? []);
+
         $yearSuffix = match ((int) $student->year_level) {
             1 => 'st',
             2 => 'nd',
@@ -47,15 +73,20 @@ class StudentController extends Controller
             'id' => (string) $student->id,
             'name' => $student->name,
             'email' => $student->email,
-            'idNumber' => $student->profile['idNumber'] ?? '',
+            'idNumber' => $profile['idNumber'] ?? '',
             'program' => $student->department,
             'year' => $student->year_level . $yearSuffix,
             'status' => $student->status === 'inactive' ? 'Irregular' : 'Regular',
-            'phone' => $student->profile['phone'] ?? '',
-            'address' => $student->profile['address'] ?? '',
-            'dateOfBirth' => $student->profile['dateOfBirth'] ?? '',
-            'skills' => $student->profile['skills'] ?? '',
-            'organizations' => $student->profile['organizations'] ?? '',
+            'phone' => $profile['phone'] ?? '',
+            'address' => $profile['address'] ?? '',
+            'dateOfBirth' => $profile['dateOfBirth'] ?? '',
+            'skills' => implode(', ', $skills),
+            'skillsArray' => $skills,
+            'organizations' => implode(', ', $organizations),
+            'organizationsArray' => $organizations,
+            'activities' => implode(', ', $activities),
+            'activitiesArray' => $activities,
+            'academicHistory' => $profile['academic_history'] ?? [],
             'created_at' => $student->created_at,
             'updated_at' => $student->updated_at,
         ];
@@ -66,16 +97,43 @@ class StudentController extends Controller
     {
         $query = Student::query();
 
-        if ($request->has('department')) {
+        if ($request->filled('department')) {
             $query->where('department', $request->department);
         }
 
-        if ($request->has('year_level')) {
+        if ($request->filled('year_level')) {
             $query->where('year_level', $request->year_level);
         }
 
-        if ($request->has('status')) {
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
+        }
+
+        if ($request->filled('skill')) {
+            $skill = trim($request->skill);
+            $escaped = str_replace('"', '\\"', $skill);
+            $query->where(function ($subQuery) use ($skill, $escaped) {
+                $subQuery->where('profile', 'like', '%"' . $escaped . '"%')
+                    ->orWhere('profile', 'like', '%' . $skill . '%');
+            });
+        }
+
+        if ($request->filled('organization')) {
+            $organization = trim($request->organization);
+            $escaped = str_replace('"', '\\"', $organization);
+            $query->where(function ($subQuery) use ($organization, $escaped) {
+                $subQuery->where('profile', 'like', '%"' . $escaped . '"%')
+                    ->orWhere('profile', 'like', '%' . $organization . '%');
+            });
+        }
+
+        if ($request->filled('activity')) {
+            $activity = trim($request->activity);
+            $escaped = str_replace('"', '\\"', $activity);
+            $query->where(function ($subQuery) use ($activity, $escaped) {
+                $subQuery->where('profile', 'like', '%"' . $escaped . '"%')
+                    ->orWhere('profile', 'like', '%' . $activity . '%');
+            });
         }
 
         $students = $query->get()->map(function (Student $student) {
@@ -99,8 +157,10 @@ class StudentController extends Controller
             'phone' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:255',
             'dateOfBirth' => 'nullable|string|max:255',
-            'skills' => 'nullable|string|max:1000',
-            'organizations' => 'nullable|string|max:1000',
+            'skills' => 'nullable',
+            'organizations' => 'nullable',
+            'activities' => 'nullable',
+            'academicHistory' => 'nullable',
         ]);
 
         $student = Student::create([
@@ -114,8 +174,10 @@ class StudentController extends Controller
                 'phone' => $validated['phone'] ?? '',
                 'address' => $validated['address'] ?? '',
                 'dateOfBirth' => $validated['dateOfBirth'] ?? '',
-                'skills' => $validated['skills'] ?? '',
-                'organizations' => $validated['organizations'] ?? '',
+                'skills' => $this->normalizeDelimitedValue($validated['skills'] ?? []),
+                'organizations' => $this->normalizeDelimitedValue($validated['organizations'] ?? []),
+                'activities' => $this->normalizeDelimitedValue($validated['activities'] ?? []),
+                'academic_history' => $validated['academicHistory'] ?? [],
             ],
         ]);
 
@@ -125,7 +187,7 @@ class StudentController extends Controller
     public function show($id)
     {
         $student = Student::findOrFail($id);
-        return response()->json($student);
+        return response()->json($this->mapStudentForFrontend($student));
     }
 
     public function update(Request $request, $id)
@@ -142,8 +204,10 @@ class StudentController extends Controller
             'phone' => 'sometimes|nullable|string|max:255',
             'address' => 'sometimes|nullable|string|max:255',
             'dateOfBirth' => 'sometimes|nullable|string|max:255',
-            'skills' => 'sometimes|nullable|string|max:1000',
-            'organizations' => 'sometimes|nullable|string|max:1000',
+            'skills' => 'sometimes|nullable',
+            'organizations' => 'sometimes|nullable',
+            'activities' => 'sometimes|nullable',
+            'academicHistory' => 'sometimes|nullable',
         ]);
 
         $student = Student::findOrFail($id);
@@ -165,12 +229,28 @@ class StudentController extends Controller
             $payload['status'] = $this->normalizeStatus($validated['status']);
         }
 
-        $profile = is_array($student->profile) ? $student->profile : [];
-        foreach (['idNumber', 'phone', 'address', 'dateOfBirth', 'skills', 'organizations'] as $field) {
+        $profile = is_array($student->profile)
+            ? $student->profile
+            : (json_decode($student->profile ?? '', true) ?: []);
+        foreach (['idNumber', 'phone', 'address', 'dateOfBirth'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $profile[$field] = $validated[$field] ?? '';
             }
         }
+
+        if (array_key_exists('skills', $validated)) {
+            $profile['skills'] = $this->normalizeDelimitedValue($validated['skills'] ?? []);
+        }
+        if (array_key_exists('organizations', $validated)) {
+            $profile['organizations'] = $this->normalizeDelimitedValue($validated['organizations'] ?? []);
+        }
+        if (array_key_exists('activities', $validated)) {
+            $profile['activities'] = $this->normalizeDelimitedValue($validated['activities'] ?? []);
+        }
+        if (array_key_exists('academicHistory', $validated)) {
+            $profile['academic_history'] = $validated['academicHistory'] ?? [];
+        }
+
         $payload['profile'] = $profile;
 
         $student->update($payload);

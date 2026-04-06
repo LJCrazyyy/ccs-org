@@ -19,6 +19,8 @@ const initialFormState = {
   dateOfBirth: '',
   skills: '',
   organizations: '',
+  activities: '',
+  academicHistory: '',
   password: '',
 };
 
@@ -36,6 +38,7 @@ export const AdminStudents: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [skillFilter, setSkillFilter] = useState('All');
   const [organizationFilter, setOrganizationFilter] = useState('All');
+  const [activityFilter, setActivityFilter] = useState('All');
 
   const fetcher = useMemo(() => () => studentDB.getAllStudents(), []);
   const { data: studentsData, execute: refreshStudents } = useAsync(fetcher);
@@ -71,6 +74,19 @@ export const AdminStudents: React.FC = () => {
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [students]);
 
+  const activityOptions = useMemo(() => {
+    const unique = new Set<string>();
+    students.forEach((student: any) => {
+      const rawActivities = typeof student.activities === 'string' ? student.activities : '';
+      rawActivities
+        .split(',')
+        .map((a: string) => a.trim())
+        .filter(Boolean)
+        .forEach((a: string) => unique.add(a));
+    });
+    return Array.from(unique).sort((a, b) => a.localeCompare(b));
+  }, [students]);
+
   const displayedStudents = useMemo(() => {
     return filteredStudents.filter((student: any) => {
       const matchesYear = yearFilter === 'All' || student.year === yearFilter;
@@ -83,7 +99,11 @@ export const AdminStudents: React.FC = () => {
       const matchesOrganization =
         organizationFilter === 'All' || studentOrganizations.split(',').map((o: string) => o.trim()).includes(organizationFilter.toLowerCase());
 
-      return matchesYear && matchesStatus && matchesSkill && matchesOrganization;
+      const studentActivities = typeof student.activities === 'string' ? student.activities.toLowerCase() : '';
+      const matchesActivity =
+        activityFilter === 'All' || studentActivities.split(',').map((a: string) => a.trim()).includes(activityFilter.toLowerCase());
+
+      return matchesYear && matchesStatus && matchesSkill && matchesOrganization && matchesActivity;
     });
   }, [filteredStudents, yearFilter, statusFilter, skillFilter, organizationFilter]);
 
@@ -269,6 +289,18 @@ export const AdminStudents: React.FC = () => {
 
             <FormInput label="Skills" id="skills" value={formData.skills} onChange={handleChange} />
             <FormInput label="Organizations" id="organizations" value={formData.organizations} onChange={handleChange} />
+            <FormInput label="Activities" id="activities" value={formData.activities} onChange={handleChange} />
+            <div className="col-span-full">
+              <label className="text-sm font-semibold mb-1 text-gray-700">Academic History</label>
+              <textarea
+                id="academicHistory"
+                value={formData.academicHistory}
+                onChange={handleChange}
+                rows={4}
+                className="w-full border rounded-xl p-3 bg-white outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="List academic history entries separated by commas or bullets"
+              />
+            </div>
 
             <div className="col-span-full flex gap-3 mt-4">
               <button
@@ -328,6 +360,19 @@ export const AdminStudents: React.FC = () => {
             {organizationOptions.map((organization) => (
               <option key={organization} value={organization}>
                 {organization}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={activityFilter}
+            onChange={(e) => setActivityFilter(e.target.value)}
+            className="border p-2 rounded-xl bg-white outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            <option value="All">All Activities</option>
+            {activityOptions.map((activity) => (
+              <option key={activity} value={activity}>
+                {activity}
               </option>
             ))}
           </select>
@@ -435,8 +480,12 @@ export const AdminStudents: React.FC = () => {
                 </div>
               </div>
               <div>
-                <p className="text-xs uppercase text-gray-400 font-bold mb-1">Organizations</p>
-                <p className="text-gray-700 text-sm">{viewingStudent.organizations || 'None'}</p>
+                <p className="text-xs uppercase text-gray-400 font-bold mb-1">Activities</p>
+                <p className="text-gray-700 text-sm">{viewingStudent.activities || 'None'}</p>
+              </div>
+              <div className="col-span-full">
+                <p className="text-xs uppercase text-gray-400 font-bold mb-1">Academic History</p>
+                <p className="text-gray-700 text-sm">{viewingStudent.academicHistory || 'Not provided'}</p>
               </div>
             </div>
             <div className="bg-gray-50 p-4 flex justify-end">

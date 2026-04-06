@@ -46,6 +46,7 @@ Route::delete('/admin/faculties/{id}', [FacultyController::class, 'destroy']);
 // Student management routes
 Route::get('/admin/students', [StudentController::class, 'index']); // Filter students
 Route::post('/admin/students', [StudentController::class, 'store']); // Add student
+Route::get('/admin/students/{id}', [StudentController::class, 'show']); // View individual student
 Route::put('/admin/students/{id}', [StudentController::class, 'update']); // Edit student profile
 Route::delete('/admin/students/{id}', [StudentController::class, 'destroy']); // Delete student
 Route::post('/admin/students/{id}/message', [StudentController::class, 'messageStudent']); // Email/message student
