@@ -33,23 +33,28 @@ export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
 
   const { data: students, error: studentsError, execute: fetchStudents } = useAsync<Student[]>(() =>
-    studentDB.getAllStudents().then((data: any) => data as Student[])
+    studentDB.getAllStudents().then((data: any) => data as Student[]),
+    false
   );
 
   const { data: faculty, error: facultyError, execute: fetchFaculty } = useAsync<Faculty[]>(() =>
-    facultyDB.getAllFaculty().then((data: any) => data as Faculty[])
+    facultyDB.getAllFaculty().then((data: any) => data as Faculty[]),
+    false
   );
 
   const { data: courses, error: coursesError, execute: fetchCourses } = useAsync<Course[]>(() =>
-    coursesDB.getAllCourses().then((data: any) => (data as unknown as Course[]))
+    coursesDB.getAllCourses().then((data: any) => (data as unknown as Course[])),
+    false
   );
 
   const { data: events, error: eventsError, execute: fetchEvents } = useAsync<any[]>(() =>
-    eventsDB.getAllEvents().then((data: any) => data)
+    eventsDB.getAllEvents().then((data: any) => data),
+    false
   );
 
   const { data: announcements, error: announcementsError, execute: fetchAnnouncements } = useAsync<any[]>(() =>
-    announcementsDB.getAllAnnouncements().then((data: any) => data)
+    announcementsDB.getAllAnnouncements().then((data: any) => data),
+    false
   );
 
   // Initial Fetch on Mount
