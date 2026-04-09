@@ -1,23 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Plus, Edit, Trash2, UserCheck, UserX } from 'lucide-react';
-import { Card, SectionHeader, LoadingSpinner, ErrorMessage, SuccessMessage, Badge } from '../../components/ui/shared';
+import { UserX } from 'lucide-react';
+import { createUserWithEmailAndPassword, getAuth as getAuthFromApp } from 'firebase/auth';
+import { initializeApp, getApps, type FirebaseOptions } from 'firebase/app';
+import { collection, getDocs, query, where, doc, setDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { Card, SectionHeader, LoadingSpinner, ErrorMessage, SuccessMessage } from '../../components/ui/shared';
+
+const firebaseConfig: FirebaseOptions = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+};
+
+const secondaryApp =
+  getApps().find((app) => app.name === 'admin-user-creator') ||
+  initializeApp(firebaseConfig, 'admin-user-creator');
+
+const secondaryAuth = getAuthFromApp(secondaryApp);
 
 interface User {
-  id: string | number;
+  id: string;
   name: string;
   email: string;
-  role: 'admin' | 'faculty' | 'student';
-  created_at?: string;
-  updated_at?: string;
+  role: 'admin';
   createdAt?: string;
-  updatedAt?: string;
 }
 
 interface UserFormData {
   name: string;
   email: string;
   password: string;
-  role: 'admin' | 'faculty' | 'student';
 }
 
 export const AdminUsers: React.FC = () => {
@@ -26,15 +42,11 @@ export const AdminUsers: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
     password: '',
-    role: 'student'
   });
-
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
 
   useEffect(() => {
     fetchUsers();
@@ -43,10 +55,13 @@ export const AdminUsers: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/admin/users`);
-      if (!response.ok) throw new Error('Failed to fetch users');
-      const data = await response.json();
-      setUsers(data);
+      const usersQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
+      const snapshot = await getDocs(usersQuery);
+      const adminUsers = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...(docSnapshot.data() as Omit<User, 'id'>),
+      }));
+      setUsers(adminUsers);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch users');
     } finally {
@@ -56,56 +71,39 @@ export const AdminUsers: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const url = editingUser
-        ? `${API_BASE}/admin/users/${editingUser.id}`
-        : `${API_BASE}/admin/users`;
 
-      const method = editingUser ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      if (!response.ok) throw new Error('Failed to save user');
-
-      setSuccess(editingUser ? 'User updated successfully' : 'User created successfully');
-      setShowForm(false);
-      setEditingUser(null);
-      resetForm();
-      fetchUsers();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save user');
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
+      setError('Name, email, and password are required.');
+      return;
     }
-  };
 
-  const handleEdit = (user: User) => {
-    setEditingUser(user);
-    setFormData({
-      name: user.name,
-      email: user.email,
-      password: '',
-      role: user.role
-    });
-    setShowForm(true);
-  };
-
-  const handleDelete = async (userId: string | number) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+    if (!db) {
+      setError('Database is not initialized.');
+      return;
+    }
 
     try {
-      const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) throw new Error('Failed to delete user');
-
-      setSuccess('User deleted successfully');
-      fetchUsers();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete user');
+      setError(null);
+      const userCredential = await createUserWithEmailAndPassword(
+        secondaryAuth,
+        formData.email.trim().toLowerCase(),
+        formData.password
+      );
+      const uid = userCredential.user.uid;
+      const userData: User = {
+        id: uid,
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        role: 'admin',
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, 'users', uid), userData);
+      setSuccess('Admin created successfully. Use these credentials to sign in.');
+      setShowForm(false);
+      resetForm();
+      await fetchUsers();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to create admin user');
     }
   };
 
@@ -114,24 +112,13 @@ export const AdminUsers: React.FC = () => {
       name: '',
       email: '',
       password: '',
-      role: 'student'
     });
   };
 
   const getCreatedDate = (user: User) => {
-    const rawDate = user.created_at || user.createdAt;
-    if (!rawDate) return 'N/A';
-    const parsed = new Date(rawDate);
+    if (!user.createdAt) return 'N/A';
+    const parsed = new Date(user.createdAt);
     return Number.isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleDateString();
-  };
-
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case 'admin': return 'danger';
-      case 'faculty': return 'warning';
-      case 'student': return 'info';
-      default: return 'default';
-    }
   };
 
   if (loading) return <LoadingSpinner />;
@@ -139,15 +126,14 @@ export const AdminUsers: React.FC = () => {
   return (
     <div>
       <SectionHeader
-        title="Users Management"
-        subtitle="Manage system users and roles"
+        title="Admin Accounts"
+        subtitle="Create admin login credentials for dashboard access"
         action={{
-          label: 'Add User',
+          label: 'Add Admin',
           onClick: () => {
-            setEditingUser(null);
             resetForm();
             setShowForm(true);
-          }
+          },
         }}
       />
 
@@ -155,7 +141,7 @@ export const AdminUsers: React.FC = () => {
       {success && <SuccessMessage message={success} onDismiss={() => setSuccess(null)} />}
 
       {showForm && (
-        <Card title={editingUser ? 'Edit User' : 'Add New User'} className="mb-8">
+        <Card title="Add New Admin" className="mb-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
@@ -179,30 +165,15 @@ export const AdminUsers: React.FC = () => {
               />
             </div>
 
-            {!editingUser && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required={!editingUser}
-                />
-              </div>
-            )}
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as User['role'] })}
+              <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="student">Student</option>
-                <option value="faculty">Faculty</option>
-                <option value="admin">Admin</option>
-              </select>
+                required
+              />
             </div>
 
             <div className="flex gap-4">
@@ -210,13 +181,12 @@ export const AdminUsers: React.FC = () => {
                 type="submit"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium"
               >
-                {editingUser ? 'Update User' : 'Create User'}
+                Create Admin
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setShowForm(false);
-                  setEditingUser(null);
                   resetForm();
                 }}
                 className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-medium"
@@ -235,9 +205,7 @@ export const AdminUsers: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -245,30 +213,7 @@ export const AdminUsers: React.FC = () => {
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge label={user.role} variant={getRoleBadgeVariant(user.role)} />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getCreatedDate(user)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEdit(user)}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="Edit user"
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user.id)}
-                        className="text-red-600 hover:text-red-900"
-                        title="Delete user"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getCreatedDate(user)}</td>
                 </tr>
               ))}
             </tbody>
@@ -277,7 +222,7 @@ export const AdminUsers: React.FC = () => {
           {users.length === 0 && (
             <div className="text-center py-12">
               <UserX size={48} className="mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-600">No users found</p>
+              <p className="text-gray-600">No admin accounts found</p>
             </div>
           )}
         </div>
