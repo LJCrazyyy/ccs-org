@@ -8,12 +8,12 @@ const getErrorMessage = (errorCode: string): string => {
   const errorMap: Record<string, string> = {
     'auth/invalid-email': 'Please enter a valid email address',
     'auth/user-disabled': 'This account has been disabled. Contact support.',
-    'auth/user-not-found': 'No account exists with this email. Check the email address or create an account first.',
+    'auth/user-not-found': 'No account exists with this email address',
     'auth/wrong-password': 'Incorrect password. Please try again.',
-    'auth/invalid-credential': 'Invalid email or password. Please check both and try again.',
+    'auth/invalid-credential': 'Invalid email or password. Please try again.',
     'auth/too-many-requests': 'Too many failed login attempts. Please try again later.',
     'auth/operation-not-allowed': 'Login is currently unavailable. Please try again later.',
-    'auth/network-request-failed': 'Network error. Please check your internet connection.',
+    'auth/network-request-failed': 'Network error. Please check your connection.',
     'auth/internal-error': 'An error occurred. Please try again later.',
   };
   return errorMap[errorCode] || 'Login failed. Please check your email and password.';
@@ -88,15 +88,11 @@ export const Login: React.FC = () => {
     }
 
     try {
-      console.log('[LOGIN] Submitting login form for:', email);
       await login(email.trim(), password);
     } catch (err: any) {
-      const errorCode = err?.code || '';
-      const errorMsg = err?.message || 'Login failed. Please check your email and password.';
-      const resolvedMessage = errorCode ? getErrorMessage(errorCode) : errorMsg;
-      
-      console.error('[LOGIN] Form login error:', { code: errorCode, message: errorMsg });
-      setGeneralError(resolvedMessage);
+      const errorCode = err.code || err.message;
+      setGeneralError(getErrorMessage(errorCode));
+      console.error('Login error:', err);
     }
   };
 
@@ -106,16 +102,12 @@ export const Login: React.FC = () => {
     setEmailError('');
     setPasswordError('');
     try {
-      console.log('[LOGIN] Quick login attempt for:', credentials.email);
       // Note: We use authLoading from the context instead of a local setIsLoading
-      await login(credentials.email.trim(), credentials.password);
+      await login(credentials.email, credentials.password);
     } catch (err: any) {
-      const errorCode = err?.code || '';
-      const errorMsg = err?.message || 'Login failed. Please check your email and password.';
-      const resolvedMessage = errorCode ? getErrorMessage(errorCode) : errorMsg;
-      
-      console.error('[LOGIN] Quick login error:', { code: errorCode, message: errorMsg, email: credentials.email });
-      setGeneralError(resolvedMessage);
+      const errorCode = err.code || err.message;
+      setGeneralError(getErrorMessage(errorCode));
+      console.error('Quick login error:', err);
     }
   };
 
