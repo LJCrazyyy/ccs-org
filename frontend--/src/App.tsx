@@ -15,11 +15,7 @@ import { AdminEvents } from './pages/admin/Events';
 import { AdminAnnouncements } from './pages/admin/Announcements';
 import { AdminResearch } from './pages/admin/Research';
 import { AdminUsers } from './pages/admin/Users';
-<<<<<<< HEAD
 import { AdminGuidance } from './pages/admin/Guidance';
-=======
-import { AdminGuidanceCounseling } from './pages/admin/GuidanceCounseling';
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
 
 // Student Pages
 import { StudentDashboard } from './pages/student/Dashboard';
@@ -105,15 +101,11 @@ export const App: React.FC = () => {
           />
           <Route
             path="/dashboard/admin/guidance"
-            element={<ProtectedRoute requiredRole="admin"><AdminGuidanceCounseling /></ProtectedRoute>}
+            element={<ProtectedRoute requiredRole="admin"><AdminGuidance /></ProtectedRoute>}
           />
           <Route
             path="/dashboard/admin/users"
             element={<ProtectedRoute requiredRole="admin"><AdminUsers /></ProtectedRoute>}
-          />
-          <Route
-            path="/dashboard/admin/guidance"
-            element={<ProtectedRoute requiredRole="admin"><AdminGuidance /></ProtectedRoute>}
           />
 
           {/* Student Routes */}

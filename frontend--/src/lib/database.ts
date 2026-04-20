@@ -189,20 +189,6 @@ export const facultyDB = {
     }),
 };
 
-<<<<<<< HEAD
-=======
-export const subjectsDB = {
-  getSubject: (subjectId: string) => getDocument('subjects', subjectId),
-  getAllSubjects: () => getCollection('subjects'),
-  addSubject: (data: any) => addDocument('subjects', data),
-  updateSubject: (subjectId: string, data: any) => updateDocument('subjects', subjectId, data),
-  deleteSubject: (subjectId: string) => deleteDocument('subjects', subjectId),
-};
-
-/**
- * Admin-specific operations
- */
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
 export const adminDB = {
   getAdmin: (adminId: string) => getDocument('users', adminId),
   getAllAdmins: () => apiRequest('/admin/users/admins'),
@@ -289,9 +275,4 @@ export const guidanceDB = {
     const queryString = buildQueryString({ studentId, email });
     return apiRequest(`/student/discipline-records${queryString}`);
   },
-<<<<<<< HEAD
 };
-=======
-  addDisciplineRecord: async (data: any) => addDocument('disciplineRecords', data),
-};
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70

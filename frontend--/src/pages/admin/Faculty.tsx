@@ -9,13 +9,9 @@ import { auth, db } from '../../lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { LoadingSpinner, ErrorMessage, EmptyState, FormInput, SectionHeader, Pagination, Card } from '../../components/ui/shared';
-<<<<<<< HEAD
 import { auth, db } from '../../lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-=======
-import { emitSyncEvent } from '../../lib/syncEvents';
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
 
 interface Faculty {
   id: string | number;
@@ -104,10 +100,7 @@ export const AdminFaculty: React.FC = () => {
   const [messageSubject, setMessageSubject] = useState('');
   const [messageBody, setMessageBody] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
-<<<<<<< HEAD
   const [isSubmitting, setIsSubmitting] = useState(false);
-=======
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
 
   const { data: facultyData, loading, error, execute: fetchFaculty } = useAsync<Faculty[]>(() =>
     facultyDB.getAllFaculty().then((data: any) => data as Faculty[])
@@ -194,41 +187,27 @@ export const AdminFaculty: React.FC = () => {
       return;
     }
 
-<<<<<<< HEAD
     if (!editingId && normalizedPassword.length < 6) {
       alert('Password is required for new faculty and must be at least 6 characters.');
       return;
     }
 
     if (!db || !auth) {
-=======
-    if (!auth || !db) {
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
       alert('Authentication or database is not initialized.');
       return;
     }
 
-<<<<<<< HEAD
     setIsSubmitting(true);
-=======
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
     try {
       if (editingId) {
         await facultyDB.updateFaculty(String(editingId), cleaned);
 
         const userRef = doc(db, 'users', String(editingId));
         const userSnap = await getDoc(userRef);
-<<<<<<< HEAD
         if (userSnap.exists()) {
           await updateDoc(userRef, {
             ...cleaned,
             role: 'faculty',
-=======
-
-        if (userSnap.exists()) {
-          await updateDoc(userRef, {
-            ...cleaned,
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
             updatedAt: new Date().toISOString(),
           });
         } else {
@@ -252,29 +231,15 @@ export const AdminFaculty: React.FC = () => {
         const userCredential = await createUserWithEmailAndPassword(auth, cleaned.email, normalizedPassword);
         const uid = userCredential.user.uid;
 
-<<<<<<< HEAD
         const facultyPayload = {
-=======
-        const userData = {
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
           ...cleaned,
           id: uid,
           role: 'faculty',
           createdAt: new Date().toISOString(),
         };
 
-<<<<<<< HEAD
         await setDoc(doc(db, 'users', uid), facultyPayload);
         await facultyDB.addFaculty(facultyPayload);
-=======
-        await setDoc(doc(db, 'users', uid), userData);
-        await setDoc(doc(db, 'faculties', uid), {
-          ...cleaned,
-          id: uid,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
 
         const newFaculty: Faculty = {
           ...cleaned,

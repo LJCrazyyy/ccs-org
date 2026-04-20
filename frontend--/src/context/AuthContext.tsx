@@ -91,31 +91,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             photoURL: currentUser.photoURL || undefined,
           };
           setUser(basicUser);
-<<<<<<< HEAD
           
           // Fetch full user data from Firestore in background (non-blocking)
-          getDoc(doc(db!, 'users', currentUser.uid))
-            .then((userDoc) => {
-              if (userDoc.exists()) {
-                const userData = userDoc.data() as User;
-                setUser(userData); // Update with full Firestore data
-=======
-
           if (db) {
-            const userRef = doc(db, 'users', currentUser.uid);
-            userDocUnsubscribe = onSnapshot(
-              userRef,
-              (userDoc) => {
+            getDoc(doc(db, 'users', currentUser.uid))
+              .then((userDoc) => {
                 if (userDoc.exists()) {
                   const userData = userDoc.data() as User;
-                  setUser(userData);
+                  setUser(userData); // Update with full Firestore data
                 }
-              },
-              (err) => {
-                console.warn('Failed to subscribe to Firestore user updates:', err);
->>>>>>> ea6091d96e8feaa8a9551935f7cc418dee245e70
-              }
-            );
+              })
+              .catch((err) => {
+                console.warn('Failed to load Firestore user profile:', err);
+              });
           }
         } else {
           setFirebaseUser(null);
