@@ -70,6 +70,72 @@ const resolveCourseRecord = (schedule, allCourses, allSubjects) => {
   });
 };
 
+const normalizePeopleList = (value) => {
+  if (!value) return [];
+  const entries = Array.isArray(value) ? value : [value];
+
+  return entries
+    .flatMap((entry) => {
+      if (entry == null) return [];
+      if (typeof entry === 'string') return [entry.trim()];
+      if (typeof entry === 'object') {
+        return [entry.name, entry.fullName, entry.displayName, entry.label, entry.title, entry.id]
+          .map((item) => String(item ?? '').trim())
+          .filter(Boolean);
+      }
+      return [String(entry).trim()];
+    })
+    .filter(Boolean);
+};
+
+const resolvePeopleNames = (value, peopleIndex) => {
+  const entries = Array.isArray(value) ? value : value ? [value] : [];
+
+  return entries
+    .map((entry) => {
+      if (entry == null) return '';
+
+      if (typeof entry === 'object') {
+        return String(entry.name || entry.fullName || entry.displayName || entry.label || entry.title || entry.id || '').trim();
+      }
+
+      const key = String(entry).trim();
+      if (!key) return '';
+
+      return (
+        peopleIndex.get(key) ||
+        peopleIndex.get(key.toLowerCase()) ||
+        key
+      );
+    })
+    .map((name) => String(name ?? '').trim())
+    .filter(Boolean);
+};
+
+const buildPeopleIndex = (db) => {
+  const index = new Map();
+  const allUsers = (db.users ?? []).map(normalizeRecord);
+  const allFaculties = (db.faculties ?? []).map(normalizeRecord);
+
+  const registerPerson = (person) => {
+    const resolvedName = String(person?.name || person?.fullName || person?.displayName || person?.label || person?.title || '').trim();
+    if (!resolvedName) return;
+
+    [person?.id, person?.uid, person?.userId, person?.user_id, person?.firebaseUid, person?.authUid, person?.email]
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean)
+      .forEach((key) => {
+        index.set(key, resolvedName);
+        index.set(key.toLowerCase(), resolvedName);
+      });
+  };
+
+  allUsers.forEach(registerPerson);
+  allFaculties.forEach(registerPerson);
+
+  return index;
+};
+
 const studentCandidateValues = (student) => [
   student?.id,
   student?.studentId,
@@ -434,6 +500,7 @@ export const registerStudentEvent = async (studentId, eventId) =>
 export const getStudentResearch = async (studentId) => {
   const db = await loadDb();
   const allResearch = (db.research ?? []).map(normalizeRecord);
+  const peopleIndex = buildPeopleIndex(db);
 
   const studentResearch = allResearch.filter((research) => {
     const students = research.students ?? research.student_ids ?? [];
@@ -446,10 +513,11 @@ export const getStudentResearch = async (studentId) => {
     id: research.id,
     title: research.title,
     description: research.description ?? research.abstract,
-    authors: research.authors ?? [research.author],
+    authors: resolvePeopleNames(research.authors ?? research.author ?? research.author_names, peopleIndex),
     year: research.year,
     status: research.status,
-    adviser: research.adviser ?? research.advisers?.[0],
+    adviser: resolvePeopleNames(research.adviser ?? research.advisers?.[0] ?? research.advisor ?? research.advisor_name, peopleIndex)[0] || '',
+    advisers: resolvePeopleNames(research.advisers ?? research.advisors ?? research.adviser, peopleIndex),
     panelMembers: research.panel_members ?? research.panelMembers ?? [],
     url: research.url ?? research.link,
   }));

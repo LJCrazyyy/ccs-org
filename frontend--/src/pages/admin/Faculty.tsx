@@ -9,6 +9,7 @@ import { auth, db } from '../../lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { LoadingSpinner, ErrorMessage, EmptyState, FormInput, SectionHeader, Pagination, Card } from '../../components/ui/shared';
+import { emitSyncEvent } from '../../lib/syncEvents';
 
 interface Faculty {
   id: string | number;
@@ -459,9 +460,6 @@ export const AdminFaculty: React.FC = () => {
               >
                 <option>Computer Science</option>
                 <option>Information Technology</option>
-                <option>Engineering</option>
-                <option>Business</option>
-                <option>Liberal Arts</option>
               </select>
               {touched.department && errors.department && (
                 <p className="text-red-600 text-xs font-medium mt-1">{errors.department}</p>

@@ -7,9 +7,11 @@ import {
   onAuthStateChanged,
   setPersistence,
   browserLocalPersistence,
+  getAuth as getAuthFromApp,
 } from 'firebase/auth';
+import { initializeApp, getApps, type FirebaseOptions } from 'firebase/app';
 import { auth, db, firebaseInitError } from '../lib/firebase';
-import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export type UserRole = 'admin' | 'student' | 'faculty';
 
@@ -37,6 +39,22 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const firebaseConfig: FirebaseOptions = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+};
+
+const secondaryApp =
+  getApps().find((app) => app.name === 'signup-user-creator') ||
+  initializeApp(firebaseConfig, 'signup-user-creator');
+
+const secondaryAuth = getAuthFromApp(secondaryApp);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -187,18 +205,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw firebaseInitError;
       }
 
-      const result = await createUserWithEmailAndPassword(auth!, email, password);
+      if (!db) {
+        throw new Error('Database is not initialized');
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const result = await createUserWithEmailAndPassword(secondaryAuth, normalizedEmail, password);
       
       // Create user document in Firestore
       const newUser: User = {
         id: result.user.uid,
-        name,
-        email,
+        name: name.trim(),
+        email: normalizedEmail,
         role,
       };
       
-      await setDoc(doc(db!, 'users', result.user.uid), newUser);
-      setUser(newUser);
+      await setDoc(doc(db, 'users', result.user.uid), newUser);
+
+      // Ensure account creation does not alter the active app session.
+      await firebaseSignOut(secondaryAuth);
     } catch (err: any) {
       const errorMessage = err.message || 'Signup failed';
       setError(errorMessage);

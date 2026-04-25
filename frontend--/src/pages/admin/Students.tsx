@@ -30,6 +30,7 @@ const initialFormState = {
   name: '',
   email: '',
   idNumber: '',
+  section: '',
   year: '1st',
   program: 'BSCS',
   status: 'Regular',
@@ -91,6 +92,95 @@ export const AdminStudents: React.FC = () => {
     });
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [students]);
+
+  const sectionOptions = useMemo(() => {
+    const programPrefixes: Record<string, string> = {
+      BSCS: 'CS',
+      BSIT: 'IT',
+    };
+
+    const yearPrefixMap: Record<string, string> = {
+      '1st': '1',
+      '2nd': '2',
+      '3rd': '3',
+      '4th': '4',
+    };
+
+    const selectedProgramPrefix = programPrefixes[formData.program] || 'IT';
+    const selectedYearPrefix = yearPrefixMap[formData.year] || '';
+    const selectedYearSections = selectedYearPrefix
+      ? [
+          `${selectedYearPrefix}${selectedProgramPrefix}-A`,
+          `${selectedYearPrefix}${selectedProgramPrefix}-B`,
+          `${selectedYearPrefix}${selectedProgramPrefix}-C`,
+          `${selectedYearPrefix}${selectedProgramPrefix}-D`,
+          `${selectedYearPrefix}${selectedProgramPrefix}-E`,
+        ]
+      : [];
+
+    const unique = new Set<string>();
+    students.forEach((student: any) => {
+      const section = typeof student.section === 'string' ? student.section.trim() : '';
+      const studentYear = typeof student.year === 'string' ? student.year.trim() : '';
+      const studentProgram = typeof student.program === 'string' ? student.program.trim() : '';
+      const studentProgramPrefix = programPrefixes[studentProgram] || '';
+      const studentYearPrefix = yearPrefixMap[studentYear] || '';
+      const expectedPrefix = studentProgramPrefix ? `${studentYearPrefix}${studentProgramPrefix}` : '';
+
+      if (section && expectedPrefix && section.startsWith(expectedPrefix)) {
+        unique.add(section);
+      }
+    });
+
+    return Array.from(new Set([...unique, ...selectedYearSections])).sort((a, b) => a.localeCompare(b));
+  }, [students, formData.year, formData.program]);
+
+  const clearSectionIfMismatch = (nextYear: string, nextProgram: string) => {
+    const programPrefixes: Record<string, string> = {
+      BSCS: 'CS',
+      BSIT: 'IT',
+    };
+
+    const yearPrefixMap: Record<string, string> = {
+      '1st': '1',
+      '2nd': '2',
+      '3rd': '3',
+      '4th': '4',
+    };
+
+    const currentSection = String(formData.section || '');
+    const expectedPrefix = `${yearPrefixMap[nextYear] || ''}${programPrefixes[nextProgram] || ''}`;
+
+    if (currentSection && expectedPrefix && !currentSection.startsWith(expectedPrefix)) {
+      setFormData((previous) => ({
+        ...previous,
+        year: nextYear,
+        program: nextProgram,
+        section: '',
+      }));
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleYearChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextYear = event.target.value;
+    if (clearSectionIfMismatch(nextYear, formData.program)) {
+      return;
+    }
+
+    handleChange(event);
+  };
+
+  const handleProgramChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextProgram = event.target.value;
+    if (clearSectionIfMismatch(formData.year, nextProgram)) {
+      return;
+    }
+
+    handleChange(event);
+  };
 
   const displayedStudents = useMemo(() => {
     return filteredStudents.filter((student: any) => {
@@ -330,6 +420,23 @@ export const AdminStudents: React.FC = () => {
             )}
 
             <FormInput label="ID Number" id="idNumber" value={formData.idNumber} onChange={handleChange} placeholder="e.g., 2024-001" />
+            <div className="flex flex-col">
+              <label className="text-sm font-semibold mb-1 text-gray-700">Section</label>
+              <select
+                id="section"
+                value={formData.section}
+                onChange={handleChange}
+                className="border p-2 rounded-lg bg-white outline-none focus:ring-2 focus:ring-orange-500"
+                disabled={!formData.year}
+              >
+                <option value="">Select Section</option>
+                {sectionOptions.map((section) => (
+                  <option key={section} value={section}>
+                    {section}
+                  </option>
+                ))}
+              </select>
+            </div>
             <FormInput label="Phone" id="phone" value={formData.phone} onChange={handleChange} placeholder="+63 912 345 6789" />
             <FormInput label="Address" id="address" value={formData.address} onChange={handleChange} placeholder="Street, City, Province" />
             <FormInput label="Date of Birth" id="dateOfBirth" type="date" value={formData.dateOfBirth} onChange={handleChange} />
@@ -339,7 +446,7 @@ export const AdminStudents: React.FC = () => {
               <select
                 id="program"
                 value={formData.program}
-                onChange={handleChange}
+                onChange={handleProgramChange}
                 className="border p-2 rounded-lg bg-white outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="BSCS">BSCS (Bachelor of Science in Computer Science)</option>
@@ -349,7 +456,7 @@ export const AdminStudents: React.FC = () => {
 
             <div className="flex flex-col">
               <label className="text-sm font-semibold mb-1 text-gray-700">Year Level</label>
-              <select id="year" value={formData.year} onChange={handleChange} className="border p-2 rounded-lg bg-white outline-none focus:ring-2 focus:ring-orange-500">
+              <select id="year" value={formData.year} onChange={handleYearChange} className="border p-2 rounded-lg bg-white outline-none focus:ring-2 focus:ring-orange-500">
                 <option value="1st">1st Year</option>
                 <option value="2nd">2nd Year</option>
                 <option value="3rd">3rd Year</option>

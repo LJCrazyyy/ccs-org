@@ -37,6 +37,7 @@ interface Student {
   name: string;
   email?: string;
   idNumber?: string;
+  section?: string;
   year?: string;
   program?: string;
 }
@@ -47,12 +48,13 @@ interface Subject {
   code?: string;
   yearLevel?: string;
   department?: string;
+  sections?: string[];
+  facultyId?: string | number;
+  faculty_id?: string | number;
 }
 
 interface ScheduleFormData {
-  facultyId: string;
   courseId: string;
-  studentId: string;
   day: string;
   startTime: string;
   endTime: string;
@@ -83,9 +85,7 @@ export const AdminScheduling: React.FC = () => {
     fetch(`${API_BASE}/admin/subjects`).then((response) => response.json()) as Promise<Subject[]>
   );
   const [formData, setFormData] = useState<ScheduleFormData>({
-    facultyId: '',
     courseId: '',
-    studentId: '',
     day: '',
     startTime: '',
     endTime: '',
@@ -142,6 +142,27 @@ export const AdminScheduling: React.FC = () => {
     return map;
   }, [subjects]);
 
+  const sectionOptions = useMemo(() => {
+    const fallbackSections = [
+      '1IT-A', '1IT-B', '1IT-C', '1IT-D', '1IT-E',
+      '2IT-A', '2IT-B', '2IT-C', '2IT-D', '2IT-E',
+      '3IT-A', '3IT-B', '3IT-C', '3IT-D', '3IT-E',
+      '4IT-A', '4IT-B', '4IT-C', '4IT-D', '4IT-E',
+      '1CS-A', '1CS-B', '1CS-C', '1CS-D', '1CS-E',
+      '2CS-A', '2CS-B', '2CS-C', '2CS-D', '2CS-E',
+      '3CS-A', '3CS-B', '3CS-C', '3CS-D', '3CS-E',
+      '4CS-A', '4CS-B', '4CS-C', '4CS-D', '4CS-E',
+    ];
+
+    const uniqueSections = new Set<string>();
+    (students || []).forEach((student) => {
+      const section = String(student.section ?? '').trim();
+      if (section) uniqueSections.add(section);
+    });
+
+    return Array.from(new Set([...uniqueSections, ...fallbackSections]));
+  }, [students]);
+
   const getCourseLabel = (schedule: Schedule) => {
     const subjectId = schedule.subject_id || schedule.subjectId || schedule.course_id || schedule.courseId;
     if (!subjectId) return '-';
@@ -174,8 +195,8 @@ export const AdminScheduling: React.FC = () => {
   const validateForm = (data: ScheduleFormData): ScheduleFormErrors => {
     const errors: ScheduleFormErrors = {};
 
-    if (!data.facultyId.trim()) errors.facultyId = 'Faculty is required.';
     if (!data.courseId.trim()) errors.courseId = 'Course or subject is required.';
+    if (!data.section.trim()) errors.section = 'Section is required.';
     if (!data.day.trim()) errors.day = 'Day is required.';
     if (!data.startTime.trim()) errors.startTime = 'Start time is required.';
     if (!data.endTime.trim()) errors.endTime = 'End time is required.';
@@ -190,9 +211,7 @@ export const AdminScheduling: React.FC = () => {
 
   const resetForm = () => {
     setFormData({
-      facultyId: '',
       courseId: '',
-      studentId: '',
       day: '',
       startTime: '',
       endTime: '',
@@ -212,9 +231,10 @@ export const AdminScheduling: React.FC = () => {
       return;
     }
 
+    const selectedSubject = subjectById.get(String(formData.courseId));
+    const assignedFacultyId = String(selectedSubject?.facultyId ?? selectedSubject?.faculty_id ?? '').trim();
+
     const payload: Record<string, any> = {
-      faculty_id: formData.facultyId,
-      facultyId: formData.facultyId,
       course_id: formData.courseId,
       courseId: formData.courseId,
       subject_id: formData.courseId,
@@ -226,38 +246,53 @@ export const AdminScheduling: React.FC = () => {
       endTime: formData.endTime,
       room: formData.room,
       section: formData.section || undefined,
+      // Store subject info for easier lookup
+      subjectCode: selectedSubject?.code || '',
+      subjectName: selectedSubject?.name || '',
     };
 
-    if (formData.studentId) {
-      payload.student_id = formData.studentId;
-      payload.studentId = formData.studentId;
-      payload.student_ids = [formData.studentId];
-      payload.students = [formData.studentId];
+    if (!assignedFacultyId) {
+      setToast({ type: 'error', message: 'Assign a faculty in Subjects & Curriculum before creating this schedule.' });
+      setSubmitting(false);
+      return;
     }
+
+    payload.faculty_id = assignedFacultyId;
+    payload.facultyId = assignedFacultyId;
 
     try {
       setSubmitting(true);
       const createdScheduleId = await schedulesDB.addSchedule(payload);
 
-      if (formData.studentId && createdScheduleId) {
-        try {
-          const studentRecord = (await studentDB.getStudent(formData.studentId)) as Record<string, any> | null;
-          const currentEnrolled = [
-            ...((studentRecord?.enrolled_classes as string[] | undefined) ?? []),
-            ...((studentRecord?.enrolledClasses as string[] | undefined) ?? []),
-          ]
-            .map((value) => String(value ?? '').trim())
-            .filter(Boolean);
+      if (formData.section && createdScheduleId) {
+        const selectedSection = formData.section.trim().toLowerCase();
+        const matchingStudents = (students || []).filter((student) => {
+          const studentSection = String(student.section ?? '').trim().toLowerCase();
+          return studentSection === selectedSection;
+        });
 
-          const nextEnrolled = Array.from(new Set([...currentEnrolled, String(createdScheduleId)]));
+        await Promise.all(
+          matchingStudents.map(async (student) => {
+            try {
+              const studentRecord = (await studentDB.getStudent(String(student.id))) as Record<string, any> | null;
+              const currentEnrolled = [
+                ...((studentRecord?.enrolled_classes as string[] | undefined) ?? []),
+                ...((studentRecord?.enrolledClasses as string[] | undefined) ?? []),
+              ]
+                .map((value) => String(value ?? '').trim())
+                .filter(Boolean);
 
-          await studentDB.updateStudent(formData.studentId, {
-            enrolled_classes: nextEnrolled,
-            enrolledClasses: nextEnrolled,
-          });
-        } catch {
-          // Schedule was created successfully; enrollment linkage can be retried manually.
-        }
+              const nextEnrolled = Array.from(new Set([...currentEnrolled, String(createdScheduleId)]));
+
+              await studentDB.updateStudent(String(student.id), {
+                enrolled_classes: nextEnrolled,
+                enrolledClasses: nextEnrolled,
+              });
+            } catch {
+              // Section enrollment sync is best-effort.
+            }
+          })
+        );
       }
 
       setToast({ type: 'success', message: 'Schedule created successfully.' });
@@ -312,26 +347,6 @@ export const AdminScheduling: React.FC = () => {
         <form onSubmit={handleCreateSchedule} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Faculty</label>
-              <select
-                value={formData.facultyId}
-                onChange={(event) => updateField('facultyId', event.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg ${
-                  formErrors.facultyId ? 'border-red-500' : 'border-gray-300'
-                }`}
-                required
-              >
-                <option value="">Select faculty</option>
-                {(faculties || []).map((faculty) => (
-                  <option key={faculty.id} value={String(faculty.id)}>
-                    {faculty.name}
-                  </option>
-                ))}
-              </select>
-              {formErrors.facultyId && <p className="text-red-600 text-xs mt-1">{formErrors.facultyId}</p>}
-            </div>
-
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Course / Subject</label>
               <select
                 value={formData.courseId}
@@ -349,6 +364,17 @@ export const AdminScheduling: React.FC = () => {
                 ))}
               </select>
               {formErrors.courseId && <p className="text-red-600 text-xs mt-1">{formErrors.courseId}</p>}
+              {formData.courseId && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Faculty assigned: {
+                    (() => {
+                      const selectedSubject = subjectById.get(String(formData.courseId));
+                      const assignedFacultyId = String(selectedSubject?.facultyId ?? selectedSubject?.faculty_id ?? '').trim();
+                      return assignedFacultyId ? (facultyById.get(assignedFacultyId)?.name || assignedFacultyId) : 'No faculty assigned yet';
+                    })()
+                  }
+                </p>
+              )}
             </div>
           </div>
 
@@ -422,30 +448,55 @@ export const AdminScheduling: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Section (Optional)</label>
-              <input
-                type="text"
+              <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+              <select
                 value={formData.section}
                 onChange={(event) => updateField('section', event.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                placeholder="e.g. BSIT 2A"
-              />
+                required
+              >
+                <option value="">Select section</option>
+                {(() => {
+                  const selectedSubject = subjectById.get(String(formData.courseId));
+                  const subjectSections = selectedSubject?.sections || [];
+                  // Show subject-specific sections if available, otherwise show all sections
+                  const options = subjectSections.length > 0 ? subjectSections : sectionOptions;
+                  return options.map((section) => (
+                    <option key={section} value={section}>
+                      {section}
+                    </option>
+                  ));
+                })()}
+              </select>
+              {formErrors.section && <p className="text-red-600 text-xs mt-1">{formErrors.section}</p>}
+              {formData.courseId && (() => {
+                const selectedSubject = subjectById.get(String(formData.courseId));
+                const subjectSections = selectedSubject?.sections || [];
+                return subjectSections.length > 0 ? (
+                  <p className="text-xs text-green-600 mt-1">
+                    Using pre-assigned sections for this subject
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-600 mt-1">
+                    No sections assigned to this subject yet. Add sections in Subjects & Curriculum.
+                  </p>
+                );
+              })()}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Student (Optional)</label>
-              <select
-                value={formData.studentId}
-                onChange={(event) => updateField('studentId', event.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="">No specific student</option>
-                {(students || []).map((student) => (
-                  <option key={student.id} value={String(student.id)}>
-                    {student.name}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Room</label>
+              <input
+                type="text"
+                value={formData.room}
+                onChange={(event) => updateField('room', event.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg ${
+                  formErrors.room ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="e.g. Room 301"
+                required
+              />
+              {formErrors.room && <p className="text-red-600 text-xs mt-1">{formErrors.room}</p>}
             </div>
           </div>
 

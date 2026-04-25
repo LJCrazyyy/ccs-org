@@ -420,8 +420,8 @@ export const AdminResearch: React.FC = () => {
         />
       ) : (
         <div className="space-y-4">
-          {filteredResearch.map((item) => (
-            <Card key={item.id} className="hover:shadow-lg transition">
+          {filteredResearch.map((item, index) => (
+            <Card key={item.id || `${item.title}-${item.year}-${index}`} className="hover:shadow-lg transition">
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
                   <div>

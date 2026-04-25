@@ -6,9 +6,9 @@ import { firestore } from '../firestore.js';
    UTIL FUNCTIONS
 ========================= */
 
-const nowIso = () => new Date().toISOString();
+export const nowIso = () => new Date().toISOString();
 
-const normalizeRecord = (record) => ({
+export const normalizeRecord = (record) => ({
   ...record,
   created_at: record.created_at ?? record.createdAt ?? null,
   updated_at: record.updated_at ?? record.updatedAt ?? null,
@@ -47,6 +47,7 @@ const collectionKeys = Object.keys(defaultDb);
 let writeQueue = Promise.resolve();
 let useFileFallback = false;
 let hasLoggedFallback = false;
+let fallbackReason = null;
 
 const localDbPath = new URL('../../data/db.json', import.meta.url);
 
@@ -73,10 +74,23 @@ const isFirestoreUnavailableError = (error) => {
    FALLBACK HANDLING
 ========================= */
 
+const describeFirestoreError = (error) => {
+  const code = error?.code ? String(error.code) : 'unknown';
+  const message = String(error?.message ?? error?.details ?? 'unknown error');
+  const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+
+  if (emulatorHost) {
+    return `Firestore emulator at ${emulatorHost} is unavailable (${code}: ${message})`;
+  }
+
+  return `Firestore is unavailable (${code}: ${message})`;
+};
+
 const logFallbackOnce = () => {
   if (hasLoggedFallback) return;
   hasLoggedFallback = true;
-  console.warn('[store] Firestore unavailable. Using local db.json fallback.');
+  const reason = fallbackReason ? `: ${fallbackReason}` : '.';
+  console.warn(`[store] Firestore unavailable. Using local db.json fallback${reason}`);
 };
 
 const loadDbFromFile = async () => {
@@ -157,6 +171,7 @@ export const loadDb = async () => {
     if (!isFirestoreUnavailableError(error)) throw error;
 
     useFileFallback = true;
+    fallbackReason = describeFirestoreError(error);
     logFallbackOnce();
     return loadDbFromFile();
   }
@@ -220,6 +235,7 @@ export const saveDb = async (db) => {
     if (!isFirestoreUnavailableError(error)) throw error;
 
     useFileFallback = true;
+    fallbackReason = describeFirestoreError(error);
     logFallbackOnce();
     await saveDbToFile(db);
   }

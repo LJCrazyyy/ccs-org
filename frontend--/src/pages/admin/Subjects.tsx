@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Edit, Trash2 } from 'lucide-react';
+import { facultyDB } from '../../lib/database';
 import { Card, SectionHeader, LoadingSpinner, ErrorMessage, SuccessMessage } from '../../components/ui/shared';
 import { emitSyncEvent, onSyncEvent } from '../../lib/syncEvents';
 
@@ -15,6 +16,7 @@ interface Subject {
   lectureUnits: number;
   labUnits: number;
   facultyId?: string | number;
+  sections?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -29,10 +31,20 @@ interface SubjectFormData {
   type: 'Lecture' | 'Lab' | 'Both';
   lectureUnits: number;
   labUnits: number;
+  facultyId: string;
+  sections: string;
+}
+
+interface Faculty {
+  id: string | number;
+  name: string;
+  email?: string;
+  department?: string;
 }
 
 export const AdminSubjects: React.FC = () => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [facultyList, setFacultyList] = useState<Faculty[]>([]);
   const [departmentFilter, setDepartmentFilter] = useState('All');
   const [yearFilter, setYearFilter] = useState('All');
   const [loading, setLoading] = useState(true);
@@ -50,12 +62,15 @@ export const AdminSubjects: React.FC = () => {
     type: 'Both',
     lectureUnits: 2,
     labUnits: 3,
+    facultyId: '',
+    sections: '',
   });
 
   const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
   useEffect(() => {
     fetchSubjects();
+    facultyDB.getAllFaculty().then((data) => setFacultyList(data as Faculty[])).catch(() => setFacultyList([]));
 
     // Listen for sync events to refresh subjects when changes happen elsewhere
     const unsubscribe = onSyncEvent(({ detail }) => {
@@ -90,11 +105,18 @@ export const AdminSubjects: React.FC = () => {
 
       const method = editingSubject ? 'PUT' : 'POST';
 
+      const sectionsArray = formData.sections
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          facultyId: formData.facultyId || undefined,
+          sections: sectionsArray,
           autoAssignRegular: true,
         })
       });
@@ -132,6 +154,8 @@ export const AdminSubjects: React.FC = () => {
       type: subject.type || 'Both',
       lectureUnits: subject.lectureUnits ?? 2,
       labUnits: subject.labUnits ?? 3,
+      facultyId: String(subject.facultyId ?? ''),
+      sections: (subject.sections || []).join(', '),
     });
     setShowForm(true);
   };
@@ -167,6 +191,8 @@ export const AdminSubjects: React.FC = () => {
       type: 'Both',
       lectureUnits: 2,
       labUnits: 3,
+      facultyId: '',
+      sections: '',
     });
   };
 
@@ -266,16 +292,39 @@ export const AdminSubjects: React.FC = () => {
                   required
                 >
                   <option value="">Select Department</option>
-                  <option value="BSCS">BSCS</option>
-                  <option value="BSIT">BSIT</option>
-                  <option value="Computer Science">Computer Science</option>
-                  <option value="Information Technology">Information Technology</option>
-                  <option value="Mathematics">Mathematics</option>
-                  <option value="Engineering">Engineering</option>
-                  <option value="Business">Business</option>
-                  <option value="Arts">Arts</option>
+                  <option value="Computer Science">BSCS/Computer Science</option>
+                  <option value="Information Technology">BSIT/Information Technology</option>
+                  
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Assigned Faculty</label>
+              <select
+                value={formData.facultyId}
+                onChange={(e) => setFormData({ ...formData, facultyId: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">No faculty assigned</option>
+                {facultyList.map((faculty) => (
+                  <option key={faculty.id} value={String(faculty.id)}>
+                    {faculty.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Assigned Sections</label>
+              <input
+                type="text"
+                value={formData.sections}
+                onChange={(e) => setFormData({ ...formData, sections: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g. 1IT-A, 1IT-B, 2CS-A"
+              />
+              <p className="text-xs text-gray-500 mt-1">Separate multiple sections with commas</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -429,6 +478,7 @@ export const AdminSubjects: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Faculty</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lecture Units</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lab Units</th>
@@ -443,6 +493,11 @@ export const AdminSubjects: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{subject.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{subject.department}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{subject.yearLevel}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {subject.facultyId
+                      ? facultyList.find((faculty) => String(faculty.id) === String(subject.facultyId))?.name || String(subject.facultyId)
+                      : '-'}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{subject.type}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{subject.lectureUnits}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{subject.labUnits}</td>

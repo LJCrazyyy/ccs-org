@@ -72,6 +72,39 @@ const resolveFacultyContext = (db, facultyIdentifier) => {
 
 const matchesFacultyIdentity = (value, identitySet) => identitySet.has(toComparable(value));
 
+const findCourseOrSubjectForSchedule = (schedule, allCourses, allSubjects) => {
+  const scheduleCandidates = [
+    schedule?.course_id,
+    schedule?.courseId,
+    schedule?.subject_id,
+    schedule?.subjectId,
+    schedule?.classId,
+    schedule?.courseCode,
+    schedule?.courseName,
+    schedule?.subjectCode,
+    schedule?.subjectName,
+  ].map((value) => String(value ?? '').trim());
+
+  const hasMatchingCandidate = (record) => {
+    const recordCandidates = [record?.id, record?.code, record?.name].map((value) =>
+      String(value ?? '').trim()
+    );
+
+    return scheduleCandidates.some((candidate) => {
+      if (!candidate) {
+        return false;
+      }
+
+      return recordCandidates.some((recordCandidate) => recordCandidate === candidate);
+    });
+  };
+
+  const matchedCourse = allCourses.find(hasMatchingCandidate);
+  const matchedSubject = allSubjects.find(hasMatchingCandidate);
+
+  return matchedCourse || matchedSubject || null;
+};
+
 export const getFacultyDashboard = async (facultyId) => {
   const db = await loadDb();
   const {
@@ -119,36 +152,29 @@ export const getFacultyClasses = async (facultyId) => {
   const { facultyIdentitySet } = resolveFacultyContext(db, facultyId);
   const allSchedules = (db.schedules ?? []).map(normalizeRecord);
   const allCourses = (db.courses ?? []).map(normalizeRecord);
+  const allSubjects = (db.subjects ?? []).map(normalizeRecord);
 
   const facultyClasses = allSchedules.filter(
     (schedule) => matchesFacultyIdentity(schedule.faculty_id ?? schedule.facultyId ?? '', facultyIdentitySet)
   );
 
   return facultyClasses.map((cls) => {
-    const course = allCourses.find((c) => {
-      const scheduleCourseCandidates = [
-        cls.course_id,
-        cls.courseId,
-        cls.classId,
-        cls.courseCode,
-        cls.courseName,
-      ].map((value) => String(value ?? '').trim());
-
-      return scheduleCourseCandidates.some((candidate) => {
-        if (!candidate) {
-          return false;
-        }
-
-        return [c.id, c.code, c.name].some(
-          (courseCandidate) => String(courseCandidate ?? '').trim() === candidate
-        );
-      });
-    });
+    const matchedCourseOrSubject = findCourseOrSubjectForSchedule(cls, allCourses, allSubjects);
 
     return {
       ...cls,
-      courseName: course?.name ?? cls.courseName ?? cls.name,
-      courseCode: course?.code ?? cls.courseCode ?? cls.code,
+      courseName:
+        matchedCourseOrSubject?.name ??
+        cls.courseName ??
+        cls.subjectName ??
+        cls.name ??
+        'Unknown Course',
+      courseCode:
+        matchedCourseOrSubject?.code ??
+        cls.courseCode ??
+        cls.subjectCode ??
+        cls.code ??
+        'N/A',
     };
   });
 };
@@ -159,6 +185,7 @@ export const getClassDetails = async (facultyId, classId) => {
   const allSchedules = (db.schedules ?? []).map(normalizeRecord);
   const allStudents = (db.students ?? []).map(normalizeRecord);
   const allCourses = (db.courses ?? []).map(normalizeRecord);
+  const allSubjects = (db.subjects ?? []).map(normalizeRecord);
 
   const classSchedule = allSchedules.find(
     (schedule) =>
@@ -173,14 +200,24 @@ export const getClassDetails = async (facultyId, classId) => {
     return enrolledClasses.includes(classId);
   });
 
-  const course = allCourses.find(
-    (c) => String(c.id) === String(classSchedule.course_id ?? classSchedule.courseId)
+  const matchedCourseOrSubject = findCourseOrSubjectForSchedule(
+    classSchedule,
+    allCourses,
+    allSubjects
   );
 
   return {
     ...classSchedule,
-    courseName: course?.name ?? 'Unknown Course',
-    courseCode: course?.code ?? 'Unknown',
+    courseName:
+      matchedCourseOrSubject?.name ??
+      classSchedule.courseName ??
+      classSchedule.subjectName ??
+      'Unknown Course',
+    courseCode:
+      matchedCourseOrSubject?.code ??
+      classSchedule.courseCode ??
+      classSchedule.subjectCode ??
+      'Unknown',
     students: classStudents,
     studentCount: classStudents.length,
     materials: classSchedule.materials ?? [],
