@@ -69,11 +69,16 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    match /disciplineRecords/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Backward compatibility for older collection naming.
     match /discipline_records/{document=**} {
       allow read, write: if isSignedIn();
     }
 
-    // Fallback for other synced Laravel collections.
+    // Fallback for other synced application collections.
     match /{document=**} {
       allow read, write: if isSignedIn();
     }

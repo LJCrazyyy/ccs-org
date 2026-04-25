@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import type { Analytics } from 'firebase/analytics';
 import { getAnalytics } from 'firebase/analytics';
 import type { Auth } from 'firebase/auth';
-import { getAuth } from 'firebase/auth';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import type { FirebaseStorage } from 'firebase/storage';
@@ -48,6 +48,12 @@ if (!firebaseInitError) {
   //   }
   // }
   auth = getAuth(app);
+  const useAuthEmulator = String(import.meta.env.VITE_USE_FIREBASE_AUTH_EMULATOR ?? '').toLowerCase() === 'true';
+  const authEmulatorHost = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1';
+  const authEmulatorPort = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_PORT || '9099';
+  if (useAuthEmulator) {
+    connectAuthEmulator(auth, `http://${authEmulatorHost}:${authEmulatorPort}`, { disableWarnings: true });
+  }
   db = getFirestore(app);
   storage = getStorage(app);
 } else {

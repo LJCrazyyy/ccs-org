@@ -1,0 +1,15 @@
+[debug] [2026-04-25T01:47:22.591Z] ----------------------------------------------------------------------
+[debug] [2026-04-25T01:47:22.594Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Lyra Jamaica Vergara\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:start --config .\backend\firebase.json --only firestore auth --debug
+[debug] [2026-04-25T01:47:22.594Z] CLI Version:   15.11.0
+[debug] [2026-04-25T01:47:22.594Z] Platform:      win32
+[debug] [2026-04-25T01:47:22.595Z] Node Version:  v22.20.0
+[debug] [2026-04-25T01:47:22.595Z] Time:          Sat Apr 25 2026 09:47:22 GMT+0800 (Philippine Standard Time)
+[debug] [2026-04-25T01:47:22.595Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-04-25T01:47:24.427Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-25T01:47:24.428Z] > authorizing via signed-in user (vergaralyrajamaica335@gmail.com)
+[debug] [2026-04-25T01:47:24.439Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] i  emulators: Shutting down emulators. {"metadata":{"emulator":{"name":"hub"},"message":"Shutting down emulators."}}
+[debug] [2026-04-25T01:47:24.445Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[error] 
+[error] Error: No emulators to start, run firebase init emulators to get started.

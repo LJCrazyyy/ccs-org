@@ -1,5 +1,26 @@
 import { randomUUID } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import { firestore } from '../firestore.js';
+
+/* =========================
+   UTIL FUNCTIONS
+========================= */
+
+const nowIso = () => new Date().toISOString();
+
+const normalizeRecord = (record) => ({
+  ...record,
+  created_at: record.created_at ?? record.createdAt ?? null,
+  updated_at: record.updated_at ?? record.updatedAt ?? null,
+  createdAt: record.createdAt ?? record.created_at ?? null,
+  updatedAt: record.updatedAt ?? record.updated_at ?? null,
+});
+
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+/* =========================
+   DB DEFAULT STRUCTURE
+========================= */
 
 const defaultDb = {
   users: [],
@@ -17,17 +38,87 @@ const defaultDb = {
   syllabi: [],
 };
 
-let writeQueue = Promise.resolve();
-
-const clone = (value) => JSON.parse(JSON.stringify(value));
 const collectionKeys = Object.keys(defaultDb);
 
+/* =========================
+   STATE
+========================= */
+
+let writeQueue = Promise.resolve();
+let useFileFallback = false;
+let hasLoggedFallback = false;
+
+const localDbPath = new URL('../../data/db.json', import.meta.url);
+
+/* =========================
+   ERROR HANDLING
+========================= */
+
+const isFirestoreUnavailableError = (error) => {
+  if (!error) return false;
+
+  const message = String(error.message ?? '').toLowerCase();
+  const details = String(error.details ?? '').toLowerCase();
+
+  return (
+    error.code === 14 ||
+    message.includes('unavailable') ||
+    message.includes('econnrefused') ||
+    details.includes('unavailable') ||
+    details.includes('econnrefused')
+  );
+};
+
+/* =========================
+   FALLBACK HANDLING
+========================= */
+
+const logFallbackOnce = () => {
+  if (hasLoggedFallback) return;
+  hasLoggedFallback = true;
+  console.warn('[store] Firestore unavailable. Using local db.json fallback.');
+};
+
+const loadDbFromFile = async () => {
+  try {
+    const raw = await readFile(localDbPath, 'utf8');
+    const parsed = JSON.parse(raw);
+
+    const base = clone(defaultDb);
+
+    for (const key of collectionKeys) {
+      if (Array.isArray(parsed[key])) {
+        base[key] = parsed[key].map(normalizeRecord);
+      }
+    }
+
+    return base;
+  } catch {
+    return clone(defaultDb);
+  }
+};
+
+const saveDbToFile = async (db) => {
+  const normalized = clone(db);
+
+  for (const key of collectionKeys) {
+    normalized[key] = (normalized[key] ?? []).map(normalizeRecord);
+  }
+
+  await writeFile(localDbPath, JSON.stringify(normalized, null, 2));
+};
+
+/* =========================
+   FIRESTORE BATCH
+========================= */
+
 const commitBatch = async (operations) => {
-  if (operations.length === 0) return;
+  if (!operations.length) return;
 
   const MAX_BATCH_SIZE = 450;
-  for (let index = 0; index < operations.length; index += MAX_BATCH_SIZE) {
-    const slice = operations.slice(index, index + MAX_BATCH_SIZE);
+
+  for (let i = 0; i < operations.length; i += MAX_BATCH_SIZE) {
+    const slice = operations.slice(i, i + MAX_BATCH_SIZE);
     const batch = firestore.batch();
 
     for (const op of slice) {
@@ -42,88 +133,40 @@ const commitBatch = async (operations) => {
   }
 };
 
+/* =========================
+   LOAD DB
+========================= */
+
 export const loadDb = async () => {
+  if (useFileFallback) return loadDbFromFile();
+
   const db = clone(defaultDb);
 
-  await Promise.all(
-    collectionKeys.map(async (key) => {
-      const snapshot = await firestore.collection(key).get();
-      db[key] = snapshot.docs.map((documentSnapshot) => ({
-        ...documentSnapshot.data(),
-        id: documentSnapshot.id,
-      }));
-    })
-  );
+  try {
+    await Promise.all(
+      collectionKeys.map(async (key) => {
+        const snapshot = await firestore.collection(key).get();
+
+        db[key] = snapshot.docs.map((doc) => ({
+          ...doc.data(),
+          id: doc.id,
+        }));
+      })
+    );
+  } catch (error) {
+    if (!isFirestoreUnavailableError(error)) throw error;
+
+    useFileFallback = true;
+    logFallbackOnce();
+    return loadDbFromFile();
+  }
 
   return db;
 };
 
-export const nowIso = () => new Date().toISOString();
-
-export const normalizeRecord = (record) => ({
-  ...record,
-  created_at: record.created_at ?? record.createdAt ?? null,
-  updated_at: record.updated_at ?? record.updatedAt ?? null,
-  createdAt: record.createdAt ?? record.created_at ?? null,
-  updatedAt: record.updatedAt ?? record.updated_at ?? null,
-});
-
-const toCollectionKey = (collectionName) => {
-  if (collectionName === 'discipline-records') return 'disciplineRecords';
-  return collectionName;
-};
-
-const isCollectionAllowed = (collectionName) =>
-  [
-    'users',
-    'subjects',
-    'students',
-    'faculties',
-    'courses',
-    'grades',
-    'schedules',
-    'events',
-    'research',
-    'announcements',
-    'syllabi',
-    'disciplineRecords',
-  ].includes(collectionName);
-
-export const saveDb = async (db) => {
-  const operations = [];
-
-  for (const key of collectionKeys) {
-    const collectionRef = firestore.collection(key);
-    const currentSnapshot = await collectionRef.get();
-    const nextRecords = (db[key] ?? []).map((record) => normalizeRecord(record));
-    const nextIds = new Set();
-
-    for (const record of nextRecords) {
-      const idCandidate = String(record.id ?? '').trim();
-      const id = idCandidate.length > 0 ? idCandidate : randomUUID();
-      nextIds.add(id);
-      operations.push({
-        type: 'set',
-        ref: collectionRef.doc(id),
-        data: {
-          ...record,
-          id,
-        },
-      });
-    }
-
-    for (const existing of currentSnapshot.docs) {
-      if (!nextIds.has(existing.id)) {
-        operations.push({
-          type: 'delete',
-          ref: existing.ref,
-        });
-      }
-    }
-  }
-
-  await commitBatch(operations);
-};
+/* =========================
+   WRITE LOCK
+========================= */
 
 export const withWriteLock = (operation) => {
   const next = writeQueue.then(operation, operation);
@@ -131,26 +174,97 @@ export const withWriteLock = (operation) => {
   return next;
 };
 
+/* =========================
+   SAVE DB
+========================= */
+
+export const saveDb = async (db) => {
+  if (useFileFallback) {
+    await saveDbToFile(db);
+    return;
+  }
+
+  const operations = [];
+
+  try {
+    for (const key of collectionKeys) {
+      const collectionRef = firestore.collection(key);
+      const snapshot = await collectionRef.get();
+
+      const nextRecords = (db[key] ?? []).map(normalizeRecord);
+      const nextIds = new Set();
+
+      for (const record of nextRecords) {
+        const id = String(record.id ?? '').trim() || randomUUID();
+        nextIds.add(id);
+
+        operations.push({
+          type: 'set',
+          ref: collectionRef.doc(id),
+          data: { ...record, id },
+        });
+      }
+
+      for (const doc of snapshot.docs) {
+        if (!nextIds.has(doc.id)) {
+          operations.push({
+            type: 'delete',
+            ref: doc.ref,
+          });
+        }
+      }
+    }
+
+    await commitBatch(operations);
+  } catch (error) {
+    if (!isFirestoreUnavailableError(error)) throw error;
+
+    useFileFallback = true;
+    logFallbackOnce();
+    await saveDbToFile(db);
+  }
+};
+
+/* =========================
+   CRUD HELPERS
+========================= */
+
+const toCollectionKey = (collectionName) =>
+  collectionName === 'discipline-records'
+    ? 'disciplineRecords'
+    : collectionName;
+
+const isCollectionAllowed = (name) =>
+  Object.keys(defaultDb).includes(name);
+
+/* =========================
+   CORE CRUD
+========================= */
+
 export const getAll = async (collectionName) => {
   const db = await loadDb();
   const key = toCollectionKey(collectionName);
-  if (!isCollectionAllowed(key)) {
-    return null;
-  }
+
+  if (!isCollectionAllowed(key)) return null;
+
   return (db[key] ?? []).map(normalizeRecord);
 };
 
 export const getById = async (collectionName, id) => {
   const records = await getAll(collectionName);
   if (!records) return null;
-  return records.find((record) => String(record.id) === String(id)) ?? null;
+
+  return records.find((r) => String(r.id) === String(id)) ?? null;
 };
 
 export const query = async (collectionName, filters) => {
   const records = await getAll(collectionName);
   if (!records) return null;
+
   return records.filter((record) =>
-    Object.entries(filters).every(([field, value]) => String(record[field] ?? '') === String(value))
+    Object.entries(filters).every(
+      ([k, v]) => String(record[k] ?? '') === String(v)
+    )
   );
 };
 
@@ -158,11 +272,11 @@ export const createRecord = async (collectionName, data) =>
   withWriteLock(async () => {
     const db = await loadDb();
     const key = toCollectionKey(collectionName);
-    if (!isCollectionAllowed(key)) {
-      return null;
-    }
+
+    if (!isCollectionAllowed(key)) return null;
 
     const timestamp = nowIso();
+
     const record = normalizeRecord({
       id: randomUUID(),
       ...data,
@@ -174,6 +288,7 @@ export const createRecord = async (collectionName, data) =>
 
     db[key] = [...(db[key] ?? []), record];
     await saveDb(db);
+
     return record;
   });
 
@@ -181,21 +296,21 @@ export const updateRecord = async (collectionName, id, data) =>
   withWriteLock(async () => {
     const db = await loadDb();
     const key = toCollectionKey(collectionName);
-    if (!isCollectionAllowed(key)) {
-      return null;
-    }
+
+    if (!isCollectionAllowed(key)) return null;
 
     const records = db[key] ?? [];
-    const index = records.findIndex((record) => String(record.id) === String(id));
+    const index = records.findIndex((r) => String(r.id) === String(id));
 
     const timestamp = nowIso();
+
     if (index === -1) {
       const created = normalizeRecord({
         id,
         ...data,
         created_at: timestamp,
-        createdAt: timestamp,
         updated_at: timestamp,
+        createdAt: timestamp,
         updatedAt: timestamp,
       });
 
@@ -204,19 +319,16 @@ export const updateRecord = async (collectionName, id, data) =>
       return created;
     }
 
-    const existing = records[index];
     const updated = normalizeRecord({
-      ...existing,
+      ...records[index],
       ...data,
-      id: existing.id,
-      created_at: existing.created_at ?? existing.createdAt ?? timestamp,
-      createdAt: existing.createdAt ?? existing.created_at ?? timestamp,
       updated_at: timestamp,
       updatedAt: timestamp,
     });
 
     records[index] = updated;
     db[key] = records;
+
     await saveDb(db);
     return updated;
   });
@@ -225,15 +337,16 @@ export const deleteRecord = async (collectionName, id) =>
   withWriteLock(async () => {
     const db = await loadDb();
     const key = toCollectionKey(collectionName);
-    if (!isCollectionAllowed(key)) {
-      return false;
-    }
+
+    if (!isCollectionAllowed(key)) return false;
 
     const records = db[key] ?? [];
-    const nextRecords = records.filter((record) => String(record.id) !== String(id));
-    if (nextRecords.length === records.length) return false;
+    const filtered = records.filter((r) => String(r.id) !== String(id));
 
-    db[key] = nextRecords;
+    if (filtered.length === records.length) return false;
+
+    db[key] = filtered;
     await saveDb(db);
+
     return true;
   });

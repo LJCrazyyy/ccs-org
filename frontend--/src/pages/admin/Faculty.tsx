@@ -9,9 +9,6 @@ import { auth, db } from '../../lib/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { LoadingSpinner, ErrorMessage, EmptyState, FormInput, SectionHeader, Pagination, Card } from '../../components/ui/shared';
-import { auth, db } from '../../lib/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 interface Faculty {
   id: string | number;
@@ -54,7 +51,6 @@ interface FacultyFormData {
   phone: string;
   office: string;
   qualifications: string;
-  password: string;
 }
 
 const initialFormState: FacultyFormData = {
@@ -66,7 +62,6 @@ const initialFormState: FacultyFormData = {
   phone: '',
   office: '',
   qualifications: '',
-  password: '',
 };
 
 const validationSchema = {
@@ -78,7 +73,6 @@ const validationSchema = {
   phone: (value: string) => value.trim().length === 0 ? 'Phone is required' : '',
   office: (value: string) => value.trim().length === 0 ? 'Office location is required' : '',
   qualifications: (value: string) => value.trim().length === 0 ? 'Qualifications are required' : '',
-  password: (value: string) => value.trim().length < 6 ? 'Password must be at least 6 characters' : '',
 };
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -271,7 +265,6 @@ export const AdminFaculty: React.FC = () => {
       phone: f.phone || '',
       office: f.office || '',
       qualifications: f.qualifications || '',
-      password: '',
     });
     setEditingId(String(f.id));
     setShowForm(true);
