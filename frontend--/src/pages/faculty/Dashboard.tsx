@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Users, BarChart3, BookOpen, FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ErrorMessage, EmptyState } from '../../components/ui/shared';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { facultyDB } from '../../lib/database';
 
 interface Dashboard {
   faculty: { id: string; name: string; email: string };
@@ -28,24 +27,13 @@ export const FacultyDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchFacultyEndpoint = async (path: string) => {
-    const directResponse = await fetch(`${API_BASE}${path}`);
-    if (directResponse.status !== 404) {
-      return directResponse;
-    }
-
-    return fetch(`${API_BASE}/api${path}`);
-  };
-
   useEffect(() => {
     if (!user?.id) return;
 
     const fetchDashboard = async () => {
       try {
         setLoading(true);
-        const response = await fetchFacultyEndpoint(`/faculty/${user.id}/dashboard`);
-        if (!response.ok) throw new Error('Failed to fetch dashboard');
-        const data: Dashboard = await response.json();
+        const data = (await facultyDB.getFacultyDashboard(user.id)) as Dashboard;
         setDashboard(data);
         setError(null);
       } catch (err) {
@@ -58,9 +46,7 @@ export const FacultyDashboard: React.FC = () => {
 
     const fetchClasses = async () => {
       try {
-        const response = await fetchFacultyEndpoint(`/faculty/${user.id}/classes`);
-        if (!response.ok) throw new Error('Failed to fetch classes');
-        const data: Class[] = await response.json();
+        const data = (await facultyDB.getFacultyClasses(user.id)) as Class[];
         setClasses(data);
       } catch (err) {
         console.error('Error loading classes:', err);

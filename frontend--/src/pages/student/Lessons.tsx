@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BookOpen, Download, File } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const API_BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
 
 interface CourseMaterial {
   id: string;

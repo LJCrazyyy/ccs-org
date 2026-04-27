@@ -72,7 +72,7 @@ type ToastState = {
 } | null;
 
 export const AdminScheduling: React.FC = () => {
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+  const API_BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
 
   const { data: schedules, loading, error, execute: fetchSchedules } = useAsync<Schedule[]>(() =>
     schedulesDB.getAllSchedules().then((data: any) => data as Schedule[])

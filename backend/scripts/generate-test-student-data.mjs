@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { loadDbFromFirestore, saveDbToFirestore } from './firestore-seed-utils.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const dataDir = join(__dirname, '../data');
-const dbPath = join(dataDir, 'db.json');
 const accountsCsvPath = join(dataDir, 'test-student-accounts.csv');
 
 const TOTAL_STUDENTS = 1000;
@@ -62,11 +63,6 @@ const makeOrganizations = (index) => {
   return index % 5 === 0 ? `${primary}, ${secondary}` : primary;
 };
 
-const readDb = async () => {
-  const raw = await readFile(dbPath, 'utf8');
-  return JSON.parse(raw);
-};
-
 const writeCsv = async (rows) => {
   await writeFile(accountsCsvPath, `${rows.join('\n')}\n`, 'utf8');
 };
@@ -106,7 +102,7 @@ const createStudentRecord = (index) => {
 };
 
 const main = async () => {
-  const db = await readDb();
+  const db = await loadDbFromFirestore();
   const existingUsers = Array.isArray(db.users) ? db.users.filter((user) => String(user.role).toLowerCase() !== 'student') : [];
   const students = [];
   const studentUsers = [];
@@ -149,10 +145,10 @@ const main = async () => {
     users: [...existingUsers, ...studentUsers],
   };
 
-  await writeFile(dbPath, `${JSON.stringify(nextDb, null, 2)}\n`, 'utf8');
+  await saveDbToFirestore(nextDb);
   await writeCsv(csvRows);
 
-  console.log(`[seed] Wrote ${students.length} students to backend/data/db.json`);
+  console.log(`[seed] Wrote ${students.length} students to Firestore`);
   console.log(`[seed] Wrote ${studentUsers.length} student account entries to backend/data/test-student-accounts.csv`);
   console.log(`[seed] Student password for generated accounts: ${PASSWORD}`);
 };

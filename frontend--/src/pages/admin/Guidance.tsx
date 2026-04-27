@@ -23,7 +23,7 @@ interface DisciplineRecord {
   is_resolved: boolean;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const API_BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
 
 export const AdminGuidance: React.FC = () => {
   const [records, setRecords] = useState<DisciplineRecord[]>([]);

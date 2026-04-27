@@ -48,8 +48,6 @@ export const AdminUsers: React.FC = () => {
     password: '',
   });
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -57,6 +55,9 @@ export const AdminUsers: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      if (!db) {
+        throw new Error('Database is not initialized.');
+      }
       const usersQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
       const snapshot = await getDocs(usersQuery);
       const adminUsers = snapshot.docs.map((docSnapshot) => ({
@@ -79,13 +80,11 @@ export const AdminUsers: React.FC = () => {
       return;
     }
 
-    if (!db) {
-      setError('Database is not initialized.');
-      return;
-    }
-
     try {
       setError(null);
+      if (!db) {
+        throw new Error('Database is not initialized.');
+      }
       const userCredential = await createUserWithEmailAndPassword(
         secondaryAuth,
         formData.email.trim().toLowerCase(),

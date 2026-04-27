@@ -48,6 +48,7 @@ let writeQueue = Promise.resolve();
 let useFileFallback = false;
 let hasLoggedFallback = false;
 let fallbackReason = null;
+const isProduction = String(process.env.NODE_ENV ?? '').toLowerCase() === 'production';
 
 const localDbPath = new URL('../../data/db.json', import.meta.url);
 
@@ -175,6 +176,10 @@ export const loadDb = async () => {
   } catch (error) {
     if (!isFirestoreUnavailableError(error)) throw error;
 
+    if (isProduction) {
+      throw error;
+    }
+
     useFileFallback = true;
     fallbackReason = describeFirestoreError(error);
     logFallbackOnce();
@@ -238,6 +243,10 @@ export const saveDb = async (db) => {
     await commitBatch(operations);
   } catch (error) {
     if (!isFirestoreUnavailableError(error)) throw error;
+
+    if (isProduction) {
+      throw error;
+    }
 
     useFileFallback = true;
     fallbackReason = describeFirestoreError(error);

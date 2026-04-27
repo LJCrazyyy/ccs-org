@@ -4,24 +4,7 @@
  * Run with: node scripts/seed-quicklogin-curriculum.mjs
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'db.json');
-
-function loadDb() {
-  const data = fs.readFileSync(DB_PATH, 'utf-8');
-  return JSON.parse(data);
-}
-function saveDb(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  console.log('✅ Database saved');
-}
+import { loadDbFromFirestore, saveDbToFirestore } from './firestore-seed-utils.mjs';
 function generateId() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0;
@@ -67,7 +50,7 @@ const curriculum = [
 ];
 
 async function seed() {
-  const db = loadDb();
+  const db = await loadDbFromFirestore();
   const studentUser = db.users.find(u => u.email === 'student@example.com');
   if (!studentUser) throw new Error('student@example.com not found');
   let studentProfile = db.students.find(s => s.email === 'student@example.com');
@@ -161,7 +144,7 @@ async function seed() {
   }
   db.schedules = [...db.schedules, ...newSchedules];
   db.grades = [...db.grades, ...newGrades];
-  saveDb(db);
+  await saveDbToFirestore(db);
   console.log('✅ Curriculum-based test data seeded for student@example.com');
 }
 seed().catch(console.error);

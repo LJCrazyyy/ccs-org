@@ -1,12 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const dataDir = join(__dirname, '../data');
-const dbPath = join(dataDir, 'db.json');
+import { loadDbFromFirestore, saveDbToFirestore } from './firestore-seed-utils.mjs';
 
 const TARGET_FACULTY = 30;
 const PASSWORD = 'Faculty@123';
@@ -71,15 +65,6 @@ const qualifications = [
 
 const nowIso = () => new Date().toISOString();
 
-const readDb = async () => {
-  const raw = await readFile(dbPath, 'utf8');
-  return JSON.parse(raw);
-};
-
-const writeDb = async (db) => {
-  await writeFile(dbPath, `${JSON.stringify(db, null, 2)}\n`, 'utf8');
-};
-
 const buildFacultyRecord = (index) => {
   const [firstName, lastName] = names[(index - 1) % names.length];
   const department = departments[(index - 1) % departments.length];
@@ -126,7 +111,7 @@ const buildFacultyRecord = (index) => {
 };
 
 const main = async () => {
-  const db = await readDb();
+  const db = await loadDbFromFirestore();
   const existingFaculties = Array.isArray(db.faculties) ? db.faculties : [];
   const existingUsers = Array.isArray(db.users) ? db.users : [];
 
@@ -143,11 +128,11 @@ const main = async () => {
   db.faculties = [...preservedFaculties, ...generated.map((entry) => entry.faculty)];
   db.users = [...preservedUsers, ...generated.map((entry) => entry.user)];
 
-  await writeDb(db);
+  await saveDbToFirestore(db);
 
   console.log(`[seed] Preserved ${preservedFaculties.length} existing faculty records.`);
   console.log(`[seed] Added ${generated.length} seeded faculty accounts.`);
-  console.log(`[seed] Total faculty accounts in db.json: ${db.faculties.length}`);
+  console.log(`[seed] Total faculty accounts in Firestore: ${db.faculties.length}`);
   console.log(`[seed] Faculty password for generated accounts: ${PASSWORD}`);
 };
 

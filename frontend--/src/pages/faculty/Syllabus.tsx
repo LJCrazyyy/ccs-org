@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BookOpen, Plus, Trash2, FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { facultyDB } from '../../lib/database';
 
 interface Syllabus {
   id: string;
@@ -48,25 +47,13 @@ export const FacultySyllabus: React.FC = () => {
   const [content, setContent] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
-  const fetchFacultyEndpoint = async (path: string, init?: RequestInit) => {
-    const directResponse = await fetch(`${API_BASE}${path}`, init);
-    if (directResponse.status !== 404) {
-      return directResponse;
-    }
-
-    return fetch(`${API_BASE}/api${path}`, init);
-  };
-
   useEffect(() => {
     if (!user?.id) return;
 
     const fetchSyllabi = async () => {
       try {
         setLoading(true);
-        const response = await fetchFacultyEndpoint(`/faculty/${user.id}/syllabi`);
-        if (!response.ok) throw new Error('Failed to fetch syllabi');
-        const data: Syllabus[] = await response.json();
-        // Deduplicate syllabi by ID to prevent React key errors
+        const data = await facultyDB.getFacultySyllabi(user.id);
         const uniqueSyllabi = data.filter(
           (syllabus, index, self) => index === self.findIndex((s) => s.id === syllabus.id)
         );
@@ -87,13 +74,7 @@ export const FacultySyllabus: React.FC = () => {
 
     const fetchClasses = async () => {
       try {
-        const response = await fetchFacultyEndpoint(`/faculty/${user.id}/classes`);
-        if (!response.ok) {
-          setClasses([]);
-          return;
-        }
-
-        const data = (await response.json()) as FacultyClass[];
+        const data = await facultyDB.getFacultyClasses(user.id);
         setClasses(data);
 
         if (!courseId && data.length > 0) {
@@ -120,26 +101,22 @@ export const FacultySyllabus: React.FC = () => {
 
     try {
       setUploading(true);
-      const response = await fetchFacultyEndpoint(`/faculty/${user.id}/syllabi`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subjectId: targetSubjectId,
-          courseId: targetSubjectId,
-          classId: selectedClass?.id,
-          title,
-          content,
-          fileUrl: file.name,
-          status,
-          section: selectedClass?.section ?? null,
-          yearLevel: selectedClass?.yearLevel ?? null,
-        }),
+      const newSyllabus = await facultyDB.uploadSyllabus(user.id, {
+        subjectId: targetSubjectId,
+        courseId: targetSubjectId,
+        classId: selectedClass?.id,
+        subjectName: selectedClass?.subjectName || selectedClass?.courseName,
+        subjectCode: selectedClass?.subjectCode || selectedClass?.courseCode,
+        courseName: selectedClass?.courseName || selectedClass?.subjectName,
+        courseCode: selectedClass?.courseCode || selectedClass?.subjectCode,
+        title,
+        content,
+        fileUrl: file.name,
+        status,
+        section: selectedClass?.section ?? null,
+        yearLevel: selectedClass?.yearLevel ?? null,
       });
 
-      if (!response.ok) throw new Error('Upload failed');
-      const newSyllabus: Syllabus = await response.json();
       setSyllabi([...syllabi, newSyllabus]);
       setShowModal(false);
       setCourseId('');
@@ -159,11 +136,8 @@ export const FacultySyllabus: React.FC = () => {
     if (!user?.id || !window.confirm('Are you sure?')) return;
 
     try {
-      const response = await fetchFacultyEndpoint(`/faculty/${user.id}/syllabi/${syllabusId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) throw new Error('Delete failed');
+      const deleted = await facultyDB.deleteSyllabus(user.id, syllabusId);
+      if (!deleted) throw new Error('Delete failed');
       setSyllabi(syllabi.filter((s) => s.id !== syllabusId));
       setError(null);
     } catch (err) {

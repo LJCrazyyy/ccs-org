@@ -4,24 +4,7 @@
  * Run with: node scripts/seed-all-curriculum.mjs
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'db.json');
-
-function loadDb() {
-  const data = fs.readFileSync(DB_PATH, 'utf-8');
-  return JSON.parse(data);
-}
-function saveDb(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  console.log('✅ Database saved');
-}
+import { loadDbFromFirestore, saveDbToFirestore } from './firestore-seed-utils.mjs';
 function generateId() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0;
@@ -67,7 +50,7 @@ const curriculum = [
 ];
 
 async function seed() {
-  const db = loadDb();
+  const db = await loadDbFromFirestore();
   const students = db.users.filter(u => u.role === 'student');
   const faculties = db.users.filter(u => u.role === 'faculty');
   // Remove all previous enrollments/grades/schedules for all students
@@ -172,7 +155,7 @@ async function seed() {
       }
     }
   }
-  saveDb(db);
+  await saveDbToFirestore(db);
   console.log('✅ All accounts seeded with curriculum-based data');
 }
 seed().catch(console.error);

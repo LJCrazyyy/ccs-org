@@ -1,4 +1,6 @@
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+import { getApiBase } from './api-base';
+
+export const API_BASE = getApiBase();
 
 export const apiUrl = (path: string) => {
   if (path.startsWith('http')) return path;

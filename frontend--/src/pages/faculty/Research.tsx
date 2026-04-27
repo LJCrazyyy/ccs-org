@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { facultyDB } from '../../lib/database';
 
 interface ResearchItem {
   id: string;
@@ -29,24 +28,13 @@ export const FacultyResearch: React.FC = () => {
   const [selectedResearch, setSelectedResearch] = useState<ResearchItem | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  const fetchFacultyEndpoint = async (path: string, init?: RequestInit) => {
-    const directResponse = await fetch(`${API_BASE}${path}`, init);
-    if (directResponse.status !== 404) {
-      return directResponse;
-    }
-
-    return fetch(`${API_BASE}/api${path}`, init);
-  };
-
   useEffect(() => {
     if (!user?.id) return;
 
     const fetchResearch = async () => {
       try {
         setLoading(true);
-        const response = await fetchFacultyEndpoint(`/faculty/${user.id}/research`);
-        if (!response.ok) throw new Error('Failed to fetch research');
-        const data: ResearchItem[] = await response.json();
+        const data = await facultyDB.getFacultyResearch(user.id);
         const sorted = data.sort((a, b) => b.year - a.year);
         setResearch(sorted);
         setError(null);
@@ -72,9 +60,8 @@ export const FacultyResearch: React.FC = () => {
 
     try {
       setLoadingDetails(true);
-      const response = await fetchFacultyEndpoint(`/faculty/${user.id}/research/${researchId}`);
-      if (!response.ok) throw new Error('Failed to fetch research details');
-      const data = (await response.json()) as ResearchItem;
+      const data = await facultyDB.getFacultyResearchDetails(user.id, researchId);
+      if (!data) throw new Error('Failed to fetch research details');
       setSelectedResearch(data);
       setError(null);
     } catch (err) {

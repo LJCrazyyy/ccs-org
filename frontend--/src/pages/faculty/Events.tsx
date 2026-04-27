@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CalendarDays, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { facultyDB } from '../../lib/database';
 
 interface Event {
   id: string;
@@ -41,24 +40,13 @@ export const FacultyEvents: React.FC = () => {
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [inviting, setInviting] = useState(false);
 
-  const fetchFacultyEndpoint = async (path: string, init?: RequestInit) => {
-    const directResponse = await fetch(`${API_BASE}${path}`, init);
-    if (directResponse.status !== 404) {
-      return directResponse;
-    }
-
-    return fetch(`${API_BASE}/api${path}`, init);
-  };
-
   useEffect(() => {
     if (!user?.id) return;
 
     const fetchEvents = async () => {
       try {
         setLoading(true);
-        const response = await fetchFacultyEndpoint(`/faculty/${user.id}/events`);
-        if (!response.ok) throw new Error('Failed to fetch events');
-        const data: Event[] = await response.json();
+        const data = await facultyDB.getFacultyEvents(user.id);
         const sorted = data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         setEvents(sorted);
         setError(null);
@@ -77,13 +65,7 @@ export const FacultyEvents: React.FC = () => {
 
     const fetchClasses = async () => {
       try {
-        const response = await fetchFacultyEndpoint(`/faculty/${user.id}/classes`);
-        if (!response.ok) {
-          setClasses([]);
-          return;
-        }
-
-        const data = (await response.json()) as FacultyClass[];
+        const data = await facultyDB.getFacultyClasses(user.id);
         setClasses(data);
       } catch {
         setClasses([]);
@@ -99,26 +81,19 @@ export const FacultyEvents: React.FC = () => {
       return;
     }
 
-    const response = await fetchFacultyEndpoint(`/faculty/${user.id}/classes/${classId}/students`);
-    if (!response.ok) {
+    try {
+      const data = await facultyDB.getClassStudents(classId);
+      setStudents(data);
+    } catch {
       setStudents([]);
-      return;
     }
-
-    const data = (await response.json()) as StudentOption[];
-    setStudents(data);
   };
 
   const handleJoinEvent = async (eventId: string) => {
     if (!user?.id) return;
 
     try {
-      const response = await fetchFacultyEndpoint(`/faculty/${user.id}/events/${eventId}/join`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) throw new Error('Failed to join event');
-      
+      await facultyDB.joinEvent(user.id, eventId);
       setEvents(
         events.map((event) =>
           event.id === eventId ? { ...event, isRegistered: true } : event
@@ -152,18 +127,7 @@ export const FacultyEvents: React.FC = () => {
 
     try {
       setInviting(true);
-      const response = await fetchFacultyEndpoint(
-        `/faculty/${user.id}/events/${invitingEventId}/invite-students`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentIds: selectedStudentIds }),
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to invite students');
-
-      const updated = (await response.json()) as Event;
+      const updated = await facultyDB.inviteStudentsToEvent(user.id, invitingEventId, selectedStudentIds);
       setEvents((previous) => previous.map((event) => (event.id === updated.id ? { ...event, ...updated } : event)));
       setInvitingEventId(null);
       setSelectedStudentIds([]);

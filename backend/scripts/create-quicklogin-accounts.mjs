@@ -5,28 +5,7 @@
  * Run with: node scripts/create-quicklogin-accounts.mjs
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Paths
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'db.json');
-
-// Load database
-function loadDb() {
-  const data = fs.readFileSync(DB_PATH, 'utf-8');
-  return JSON.parse(data);
-}
-
-// Save database
-function saveDb(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  console.log('✅ Database saved');
-}
+import { loadDbFromFirestore, saveDbToFirestore } from './firestore-seed-utils.mjs';
 
 // Generate UUID
 function generateId() {
@@ -45,7 +24,7 @@ function now() {
 async function createQuickLoginAccounts() {
   console.log('🚀 Creating QuickLogin accounts...\n');
   
-  const db = loadDb();
+  const db = await loadDbFromFirestore();
   
   // QuickLogin accounts to create
   const quickLoginAccounts = [
@@ -143,7 +122,7 @@ async function createQuickLoginAccounts() {
     }
   }
   
-  saveDb(db);
+  await saveDbToFirestore(db);
   
   console.log('\n✅ QuickLogin accounts created!');
   console.log('\nYou can now login with:');

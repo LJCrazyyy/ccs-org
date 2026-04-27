@@ -8,7 +8,12 @@
         "build": "npm install && vite build",
         "start": "node src/server.js",
         "seed:test-students": "node scripts/generate-test-student-data.mjs",
-        "seed:faculty": "node scripts/generate-test-faculty-data.mjs"
+        "seed:faculty": "node scripts/generate-test-faculty-data.mjs",
+        "seed:quicklogin-accounts": "node scripts/create-quicklogin-accounts.mjs",
+        "seed:test-data": "node scripts/seed-test-data.mjs",
+        "seed:curriculum": "node scripts/seed-all-curriculum.mjs",
+        "seed:quicklogin": "node scripts/seed-quicklogin-data.mjs",
+        "seed:quicklogin-curriculum": "node scripts/seed-quicklogin-curriculum.mjs"
     },
     "dependencies": {
         "cors": "^2.8.5",

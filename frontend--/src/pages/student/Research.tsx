@@ -3,7 +3,7 @@ import { FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { facultyDB, studentDB } from '../../lib/database';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const API_BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
 
 interface StudentResearch {
   id: string;
