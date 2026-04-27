@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Save } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
+import { facultyDB } from '../../lib/database';
 
 interface StudentGrade {
   studentId: string;
@@ -18,10 +17,21 @@ interface StudentGrade {
 
 interface Class {
   id: string;
+  classId?: string;
   courseCode: string;
   courseName: string;
   section: string;
-  semester: string;
+  schedule: string;
+  room: string;
+  units: number;
+  type: string;
+  materials: any[];
+  quizzes: any[];
+  exams: any[];
+  activities: any[];
+  facultyId: string;
+  faculty: string;
+  description: string;
   yearLevel?: string | number;
 }
 
@@ -43,24 +53,13 @@ export const FacultyGrades: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const fetchFacultyEndpoint = async (path: string, init?: RequestInit) => {
-    const directResponse = await fetch(`${API_BASE}${path}`, init);
-    if (directResponse.status !== 404) {
-      return directResponse;
-    }
-
-    return fetch(`${API_BASE}/api${path}`, init);
-  };
-
   // Fetch available classes
   useEffect(() => {
     if (!user?.id) return;
 
     const fetchClasses = async () => {
       try {
-        const response = await fetchFacultyEndpoint(`/faculty/${user.id}/classes`);
-        if (!response.ok) throw new Error('Failed to fetch classes');
-        const data: Class[] = await response.json();
+        const data = await facultyDB.getFacultyClasses(user.id) as Class[];
         setClasses(data);
         if (data.length > 0) {
           const firstClass = data[0];
@@ -121,15 +120,10 @@ export const FacultyGrades: React.FC = () => {
     const fetchGrades = async () => {
       try {
         setLoading(true);
-        const response = await fetch(
-          `${API_BASE}/faculty/${user.id}/grades/${selectedClassId}`
-        );
-        const apiResponse = response.status === 404
-          ? await fetch(`${API_BASE}/api/faculty/${user.id}/grades/${selectedClassId}`)
-          : response;
-
-        if (!apiResponse.ok) throw new Error('Failed to fetch grades');
-        const data: GradeData = await apiResponse.json();
+        const data = await facultyDB.getFacultyGradeEntry(user.id, selectedClassId) as GradeData | null;
+        if (!data) {
+          throw new Error('Grades not found or access denied');
+        }
         setGrades(data.studentGrades);
         setError(null);
       } catch (err) {
@@ -167,24 +161,12 @@ export const FacultyGrades: React.FC = () => {
     try {
       setSaving(true);
       setError(null);
-      
-      const response = await fetchFacultyEndpoint(
-        `/faculty/${user.id}/grades/${selectedClassId}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            grades: grades.map((g) => ({
-              studentId: g.studentId,
-              attendance: g.attendance,
-              activity: g.activity,
-              exam: g.exam,
-            })),
-          }),
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to save grades');
+      await facultyDB.saveFacultyClassGrades(user.id, selectedClassId, grades.map((g) => ({
+        studentId: g.studentId,
+        attendance: g.attendance,
+        activity: g.activity,
+        exam: g.exam,
+      })));
       setSuccess('Grades saved successfully!');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {

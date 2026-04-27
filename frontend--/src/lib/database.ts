@@ -44,11 +44,14 @@ const normalizeScheduleClass = async (scheduleDoc: any) => {
   } as Record<string, any>;
 
   return {
+    id: String(schedule.id),
     classId: String(schedule.id),
     courseCode: schedule.courseCode || schedule.subjectCode || schedule.code || '',
     courseName: schedule.courseName || schedule.subjectName || schedule.name || '',
-    schedule: formatScheduleTime(schedule),
     section: schedule.section || '',
+    semester: schedule.semester || schedule.term || '',
+    yearLevel: schedule.yearLevel || schedule.year_level || '',
+    schedule: formatScheduleTime(schedule),
     room: schedule.room || '',
     units: Number(schedule.units || schedule.credits || 3),
     type: schedule.type || '',
@@ -340,6 +343,130 @@ export const batchWrite = async (
 export const studentDB = {
   getStudent: (studentId: string) => getDocument('students', studentId),
   getAllStudents: () => getCollection('students'),
+  getStudentGrades: async (studentId: string, term = 'all') => {
+    const firestoreDb = requireDb();
+    const [gradesSnapshot, scheduleSnapshot, courseSnapshot] = await Promise.all([
+      getDocs(collection(firestoreDb, 'grades')),
+      getDocs(collection(firestoreDb, 'schedules')),
+      getDocs(collection(firestoreDb, 'courses')),
+    ]);
+
+    const allSchedules = scheduleSnapshot.docs.map((scheduleDoc) => ({
+      id: scheduleDoc.id,
+      ...scheduleDoc.data(),
+    }) as Record<string, any>);
+
+    const allCourses = courseSnapshot.docs.map((courseDoc) => ({
+      id: courseDoc.id,
+      ...courseDoc.data(),
+    }) as Record<string, any>);
+
+    const studentGrades = gradesSnapshot.docs
+      .map((gradeDoc) => ({ id: gradeDoc.id, ...gradeDoc.data() } as Record<string, any>))
+      .filter((grade) =>
+        String(grade.studentId || grade.student_id || '').trim() === String(studentId).trim()
+      );
+
+    const gradesWithCourseInfo = studentGrades.map((grade) => {
+      const classId = String(grade.classId || grade.class_id || '');
+      const schedule = allSchedules.find((s) => String(s.id) === classId);
+      const courseId = String(schedule?.course_id || schedule?.courseId || '');
+      const course = allCourses.find((c) => String(c.id) === courseId);
+      const attendance = Number(grade.attendance ?? 0);
+      const activity = Number(grade.activity ?? 0);
+      const exam = Number(grade.exam ?? 0);
+      const totalGrade = Math.round((attendance * 0.1 + activity * 0.4 + exam * 0.5) * 100) / 100;
+
+      return {
+        gradeId: String(grade.id),
+        classId,
+        courseCode: course?.code || schedule?.courseCode || schedule?.subjectCode || 'Unknown',
+        courseName: course?.name || schedule?.courseName || schedule?.subjectName || 'Unknown',
+        term: schedule?.term || schedule?.semester || 'N/A',
+        attendance,
+        activity,
+        exam,
+        totalGrade,
+      };
+    });
+
+    const filteredGrades =
+      term !== 'all'
+        ? gradesWithCourseInfo.filter((grade) => String(grade.term) === String(term))
+        : gradesWithCourseInfo;
+
+    const totalGrades = filteredGrades.reduce((sum, grade) => sum + grade.totalGrade, 0);
+    const gwa = filteredGrades.length > 0 ? Math.round((totalGrades / filteredGrades.length) * 100) / 100 : 0;
+
+    return {
+      studentId,
+      grades: filteredGrades,
+      gwa,
+      totalCourses: filteredGrades.length,
+    };
+  },
+  getStudentEvents: async (studentId: string) => {
+    const firestoreDb = requireDb();
+    const [studentSnapshot, eventsSnapshot] = await Promise.all([
+      getDoc(doc(firestoreDb, 'students', studentId)),
+      getDocs(collection(firestoreDb, 'events')),
+    ]);
+
+    if (!studentSnapshot.exists()) {
+      return [];
+    }
+
+    const student = { id: studentSnapshot.id, ...studentSnapshot.data() } as Record<string, any>;
+    const registeredEvents = Array.isArray(student.registered_events)
+      ? student.registered_events
+      : Array.isArray(student.registeredEvents)
+      ? student.registeredEvents
+      : [];
+
+    return eventsSnapshot.docs.map((eventDoc) => {
+      const event = normalizeEventRecord(eventDoc);
+      return {
+        ...event,
+        date: event.date || '',
+        time: event.time || event.startTime || event.start_time || '',
+        location: event.location || '',
+        type: event.type || '',
+        description: event.description || '',
+        isRegistered: registeredEvents.includes(event.id),
+      };
+    });
+  },
+  registerStudentEvent: async (studentId: string, eventId: string) => {
+    const firestoreDb = requireDb();
+    const studentRef = doc(firestoreDb, 'students', studentId);
+    const studentSnapshot = await getDoc(studentRef);
+
+    if (!studentSnapshot.exists()) {
+      throw new Error('Student not found');
+    }
+
+    await updateDoc(studentRef, {
+      registered_events: arrayUnion(eventId),
+      registeredEvents: arrayUnion(eventId),
+      updatedAt: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    return { studentId, eventId };
+  },
+  getStudentResearch: async (studentId: string) => {
+    const firestoreDb = requireDb();
+    const researchSnapshot = await getDocs(collection(firestoreDb, 'research'));
+
+    return researchSnapshot.docs
+      .map(normalizeResearchRecord)
+      .filter((research) => {
+        const students = Array.isArray(research.students) ? research.students : [];
+        return students.some((recordStudentId) =>
+          String(recordStudentId || '').trim() === String(studentId).trim()
+        );
+      });
+  },
   addStudent: async (data: any) => {
     if (data?.id) {
       await updateDocument('students', String(data.id), data);
@@ -501,6 +628,8 @@ export const facultyDB = {
           id: student.id,
           name: student.name || `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || student.email || student.id,
           email: student.email || '',
+          yearLevel: student.yearLevel || student.year_level || '',
+          department: student.department || '',
         };
       });
     } catch {
@@ -512,8 +641,174 @@ export const facultyDB = {
           id: student.id,
           name: student.name || `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || student.email || student.id,
           email: student.email || '',
+          yearLevel: student.yearLevel || student.year_level || '',
+          department: student.department || '',
         }));
     }
+  },
+  getFacultyGradeEntry: async (facultyId: string, classId: string) => {
+    const firestoreDb = requireDb();
+    const scheduleRef = doc(firestoreDb, 'schedules', classId);
+    const scheduleSnapshot = await getDoc(scheduleRef);
+    if (!scheduleSnapshot.exists()) return null;
+
+    const scheduleData = scheduleSnapshot.data() as Record<string, any>;
+    if (String(scheduleData.faculty_id || scheduleData.facultyId || '') !== String(facultyId)) {
+      return null;
+    }
+
+    const classSchedule = await normalizeScheduleClass(scheduleSnapshot);
+    const studentSnapshot = await getDocs(
+      query(collection(firestoreDb, 'students'), where('enrolled_classes', 'array-contains', classId))
+    );
+    const allGradesSnapshot = await getDocs(collection(firestoreDb, 'grades'));
+    const allGrades = allGradesSnapshot.docs.map((gradeDoc) => ({
+      id: gradeDoc.id,
+      ...gradeDoc.data(),
+    }) as Record<string, any>);
+
+    const studentGrades = studentSnapshot.docs.map((studentDoc) => {
+      const student = { id: studentDoc.id, ...studentDoc.data() } as Record<string, any>;
+      const studentGradeRecords = allGrades.filter(
+        (grade) =>
+          String(grade.studentId || grade.student_id || '') === String(student.id) &&
+          String(grade.classId || grade.class_id || '') === String(classId)
+      );
+
+      const gradeData = studentGradeRecords.reduce(
+        (acc, grade) => {
+          acc.attendance = acc.attendance || Number(grade.attendance || 0);
+          acc.activity = acc.activity || Number(grade.activity || 0);
+          acc.exam = acc.exam || Number(grade.exam || 0);
+          return acc;
+        },
+        { attendance: 0, activity: 0, exam: 0 }
+      );
+
+      const totalGrade = gradeData.attendance * 0.1 + gradeData.activity * 0.4 + gradeData.exam * 0.5;
+      return {
+        studentId: student.id,
+        studentName: student.name || `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || student.email || student.id,
+        email: student.email || '',
+        yearLevel: student.yearLevel || student.year_level || '',
+        department: student.department || '',
+        attendance: gradeData.attendance,
+        activity: gradeData.activity,
+        exam: gradeData.exam,
+        totalGrade: Math.round(totalGrade * 100) / 100,
+      };
+    });
+
+    return {
+      classId,
+      classSchedule,
+      studentGrades,
+    };
+  },
+  saveFacultyClassGrades: async (facultyId: string, classId: string, gradesData: any[]) => {
+    const firestoreDb = requireDb();
+    const gradeCollection = collection(firestoreDb, 'grades');
+    const gradeSnapshot = await getDocs(gradeCollection);
+    const existingGrades = gradeSnapshot.docs.map((gradeDoc) => ({
+      id: gradeDoc.id,
+      ...gradeDoc.data(),
+    }) as Record<string, any>);
+
+    const now = new Date().toISOString();
+    const updatedGrades = [] as Record<string, any>[];
+
+    for (const gradeEntry of gradesData) {
+      const existingGrade = existingGrades.find(
+        (grade) =>
+          String(grade.studentId || grade.student_id || '') === String(gradeEntry.studentId) &&
+          String(grade.classId || grade.class_id || '') === String(classId)
+      );
+
+      const gradeRef = existingGrade
+        ? doc(firestoreDb, 'grades', existingGrade.id)
+        : doc(gradeCollection);
+
+      const record = {
+        id: existingGrade?.id || gradeRef.id,
+        studentId: gradeEntry.studentId,
+        student_id: gradeEntry.studentId,
+        classId,
+        class_id: classId,
+        attendance: gradeEntry.attendance ?? 0,
+        activity: gradeEntry.activity ?? 0,
+        exam: gradeEntry.exam ?? 0,
+        updatedAt: now,
+        updated_at: now,
+      };
+
+      await setDoc(gradeRef, record);
+      updatedGrades.push(record);
+    }
+
+    return updatedGrades;
+  },
+  getFacultyTeachingLoad: async (facultyId: string) => {
+    const firestoreDb = requireDb();
+    const scheduleSnapshot = await getDocs(collection(firestoreDb, 'schedules'));
+    const courseSnapshot = await getDocs(collection(firestoreDb, 'courses'));
+
+    const allCourses = courseSnapshot.docs.map((courseDoc) => ({ id: courseDoc.id, ...courseDoc.data() } as Record<string, any>));
+
+    const facultyClasses = scheduleSnapshot.docs
+      .map((scheduleDoc) => ({ id: scheduleDoc.id, ...scheduleDoc.data() } as Record<string, any>))
+      .filter((schedule) => String(schedule.faculty_id || schedule.facultyId || '') === String(facultyId));
+
+    let totalLectureHours = 0;
+    let totalLabHours = 0;
+    let totalTeachingHours = 0;
+    let totalStudents = 0;
+
+    const classes = facultyClasses.map((cls) => {
+      const course = allCourses.find((course) => String(course.id) === String(cls.course_id || cls.courseId));
+      const classType = String(cls.type || course?.type || 'lecture').toLowerCase();
+      const units = Number(cls.units ?? course?.units ?? 3);
+
+      let lectureHours = 0;
+      let labHours = 0;
+      if (classType === 'lecture-only') {
+        lectureHours = 3;
+      } else if (classType === 'lecture-lab') {
+        lectureHours = 2;
+        labHours = 3;
+      } else if (classType === 'lab-only') {
+        labHours = 3;
+      } else {
+        lectureHours = 3;
+      }
+
+      totalLectureHours += lectureHours;
+      totalLabHours += labHours;
+      totalTeachingHours += lectureHours + labHours;
+      totalStudents += Number(cls.students ?? 0);
+
+      return {
+        id: cls.id,
+        code: course?.code ?? cls.code ?? cls.courseCode ?? cls.subjectCode ?? '',
+        name: course?.name ?? cls.name ?? cls.courseName ?? cls.subjectName ?? '',
+        section: cls.section || '',
+        type: classType,
+        units,
+        lectureHours,
+        labHours,
+        totalHours: lectureHours + labHours,
+        students: Number(cls.students ?? 0),
+      };
+    });
+
+    return {
+      facultyId,
+      classes,
+      totalClasses: classes.length,
+      totalStudents,
+      totalLectureHours,
+      totalLabHours,
+      totalTeachingHours,
+    };
   },
   getFacultyResearch: async (facultyId: string) => {
     const firestoreDb = requireDb();

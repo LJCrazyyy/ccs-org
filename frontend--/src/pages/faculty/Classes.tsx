@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Users, Clock, BookOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
+import { facultyDB } from '../../lib/database';
 
 interface Class {
   id: string;
@@ -45,9 +44,7 @@ export const FacultyClasses: React.FC = () => {
     const fetchClasses = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${API_BASE}/faculty/${user.id}/classes`);
-        if (!response.ok) throw new Error('Failed to fetch classes');
-        const data: Class[] = await response.json();
+        const data = await facultyDB.getFacultyClasses(user.id);
         setClasses(data);
         setError(null);
       } catch (err) {
@@ -68,19 +65,10 @@ export const FacultyClasses: React.FC = () => {
       setManageLoading(true);
       setManageError(null);
 
-      const [detailsResponse, studentsResponse] = await Promise.all([
-        fetch(`${API_BASE}/faculty/${user.id}/classes/${classId}`),
-        fetch(`${API_BASE}/faculty/${user.id}/classes/${classId}/students`),
-      ]);
+      const classDetails = classes.find((cls) => cls.id === classId) || null;
+      const students = await facultyDB.getClassStudents(classId);
 
-      if (!detailsResponse.ok) {
-        throw new Error('Failed to load class details.');
-      }
-
-      const details = (await detailsResponse.json()) as ClassDetails;
-      const students = studentsResponse.ok ? ((await studentsResponse.json()) as ClassStudent[]) : [];
-
-      setSelectedClass(details);
+      setSelectedClass(classDetails);
       setClassStudents(students);
     } catch (err) {
       setManageError(err instanceof Error ? err.message : 'Unable to open class management.');

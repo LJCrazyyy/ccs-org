@@ -3,8 +3,6 @@ import { FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { facultyDB, studentDB } from '../../lib/database';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
-
 interface StudentResearch {
   id: string;
   title: string;
@@ -58,12 +56,7 @@ export const StudentResearch: React.FC = () => {
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE}/student/${user.id}/research`);
-        if (!response.ok) {
-          throw new Error('Failed to load research');
-        }
-
-        const data = await response.json();
+        const data = await studentDB.getStudentResearch(user.id);
         setResearch(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to load research');
@@ -72,7 +65,7 @@ export const StudentResearch: React.FC = () => {
       }
     };
 
-    fetchResearch();
+    void fetchResearch();
   }, [user?.id]);
 
   const sortedResearch = useMemo(

@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Briefcase, Users, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { EmptyState, ErrorMessage } from '../../components/ui/shared';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
+import { facultyDB } from '../../lib/database';
 
 interface ClassLoad {
   id: string;
@@ -34,15 +33,6 @@ export const FacultyTeachingLoad: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchFacultyEndpoint = async (path: string) => {
-    const directResponse = await fetch(`${API_BASE}${path}`);
-    if (directResponse.status !== 404) {
-      return directResponse;
-    }
-
-    return fetch(`${API_BASE}/api${path}`);
-  };
-
   useEffect(() => {
     if (!user?.id) {
       setLoading(false);
@@ -52,9 +42,7 @@ export const FacultyTeachingLoad: React.FC = () => {
     const fetchTeachingLoad = async () => {
       try {
         setLoading(true);
-        const response = await fetchFacultyEndpoint(`/faculty/${user.id}/teaching-load`);
-        if (!response.ok) throw new Error('Failed to fetch teaching load');
-        const data = (await response.json()) as TeachingLoad;
+        const data = await facultyDB.getFacultyTeachingLoad(user.id);
         setTeachingLoad(data);
         setError(null);
       } catch (err) {

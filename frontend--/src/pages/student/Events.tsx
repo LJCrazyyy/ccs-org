@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:8080' : '');
+import { studentDB } from '../../lib/database';
 
 interface StudentEvent {
   id: string;
@@ -30,12 +29,7 @@ export const StudentEvents: React.FC = () => {
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE}/student/${user.id}/events`);
-        if (!response.ok) {
-          throw new Error('Failed to load events');
-        }
-
-        const data = await response.json();
+        const data = await studentDB.getStudentEvents(user.id);
         setEvents(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to load events');
@@ -44,7 +38,7 @@ export const StudentEvents: React.FC = () => {
       }
     };
 
-    fetchEvents();
+    void fetchEvents();
   }, [user?.id]);
 
   const handleRegister = async (eventId: string) => {
@@ -52,16 +46,8 @@ export const StudentEvents: React.FC = () => {
 
     setRegistering(eventId);
     try {
-      const response = await fetch(`${API_BASE}/student/${user.id}/events/${eventId}/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to register for event');
-      }
-
-      setEvents(events.map(e =>
+      await studentDB.registerStudentEvent(user.id, eventId);
+      setEvents(events.map((e) =>
         e.id === eventId ? { ...e, isRegistered: true } : e
       ));
     } catch (err) {
