@@ -147,6 +147,32 @@ export const getFacultyDashboard = async (facultyId) => {
   };
 };
 
+// Helper function to extract year level from section name
+const extractYearLevelFromSection = (section) => {
+  if (!section) return null;
+  
+  // Match patterns like "2IT-C", "2nd Year", "BSIT 2-A", "3CS-D", etc.
+  const sectionStr = String(section).toLowerCase();
+  
+  // Check for explicit year patterns
+  if (sectionStr.includes('1st') || sectionStr.match(/^1\b|1st|first/i)) return '1st';
+  if (sectionStr.includes('2nd') || sectionStr.match(/^2\b|2nd|second/i)) return '2nd';
+  if (sectionStr.includes('3rd') || sectionStr.match(/^3\b|3rd|third/i)) return '3rd';
+  if (sectionStr.includes('4th') || sectionStr.match(/^4\b|4th|fourth/i)) return '4th';
+  
+  // Extract leading number from section like "2IT-C" -> "2nd"
+  const numberMatch = sectionStr.match(/^(\d)/);
+  if (numberMatch) {
+    const num = parseInt(numberMatch[1], 10);
+    if (num === 1) return '1st';
+    if (num === 2) return '2nd';
+    if (num === 3) return '3rd';
+    if (num === 4) return '4th';
+  }
+  
+  return null;
+};
+
 export const getFacultyClasses = async (facultyId) => {
   const db = await loadDb();
   const { facultyIdentitySet } = resolveFacultyContext(db, facultyId);
@@ -160,9 +186,13 @@ export const getFacultyClasses = async (facultyId) => {
 
   return facultyClasses.map((cls) => {
     const matchedCourseOrSubject = findCourseOrSubjectForSchedule(cls, allCourses, allSubjects);
+    
+    // Derive yearLevel from section if not already set
+    const derivedYearLevel = cls.yearLevel ?? extractYearLevelFromSection(cls.section);
 
     return {
       ...cls,
+      yearLevel: derivedYearLevel,
       courseName:
         matchedCourseOrSubject?.name ??
         cls.courseName ??
@@ -206,8 +236,12 @@ export const getClassDetails = async (facultyId, classId) => {
     allSubjects
   );
 
+  // Derive yearLevel from section if not already set
+  const derivedYearLevel = classSchedule.yearLevel ?? extractYearLevelFromSection(classSchedule.section);
+
   return {
     ...classSchedule,
+    yearLevel: derivedYearLevel,
     courseName:
       matchedCourseOrSubject?.name ??
       classSchedule.courseName ??
@@ -489,10 +523,17 @@ export const getFacultySyllabi = async (facultyId) => {
   const { facultyIdentitySet } = resolveFacultyContext(db, facultyId);
   const allSyllabi = (db.syllabi ?? []).map(normalizeRecord);
   const allSubjects = (db.subjects ?? []).map(normalizeRecord);
+  const allSchedules = (db.schedules ?? []).map(normalizeRecord);
 
   const facultySubjects = allSubjects.filter(
     (subject) => matchesFacultyIdentity(subject.facultyId ?? subject.faculty_id ?? '', facultyIdentitySet)
   );
+
+  // Get schedules for faculty subjects to extract section and yearLevel
+  const facultySchedules = allSchedules.filter((schedule) => {
+    const subjectId = schedule.subject_id ?? schedule.subjectId;
+    return facultySubjects.some((subject) => String(subject.id) === String(subjectId));
+  });
 
   const facultySyllabi = allSyllabi.filter((syllabus) => {
     const subjectId = syllabus.subject_id ?? syllabus.subjectId;
@@ -503,10 +544,21 @@ export const getFacultySyllabi = async (facultyId) => {
     const subject = facultySubjects.find(
       (s) => String(s.id) === String(syllabus.subject_id ?? syllabus.subjectId)
     );
+    
+    // Find associated schedule to get section and yearLevel
+    const schedule = facultySchedules.find(
+      (sch) => String(sch.subject_id ?? sch.subjectId) === String(syllabus.subject_id ?? syllabus.subjectId)
+    );
+    
+    // Derive yearLevel from section if not already set
+    const derivedYearLevel = schedule?.yearLevel ?? extractYearLevelFromSection(schedule?.section);
+
     return {
       ...syllabus,
       subjectName: subject?.name ?? 'Unknown',
       subjectCode: subject?.code ?? 'Unknown',
+      section: schedule?.section ?? null,
+      yearLevel: derivedYearLevel,
     };
   });
 };
@@ -516,6 +568,7 @@ export const uploadSyllabus = async (facultyId, syllabusData) =>
     const db = await loadDb();
     const { canonicalFacultyId, facultyIdentitySet } = resolveFacultyContext(db, facultyId);
     const allSubjects = (db.subjects ?? []).map(normalizeRecord);
+    const allSyllabi = (db.syllabi ?? []).map(normalizeRecord);
     const targetSubjectId = syllabusData.subject_id ?? syllabusData.subjectId ?? syllabusData.courseId;
 
     const subject = allSubjects.find(
@@ -526,21 +579,34 @@ export const uploadSyllabus = async (facultyId, syllabusData) =>
 
     if (!subject) return null;
 
+    const existingSyllabus = allSyllabi.find(
+      (record) =>
+        String(record.subject_id ?? record.subjectId) === String(subject.id) &&
+        matchesFacultyIdentity(record.faculty_id ?? record.facultyId ?? '', facultyIdentitySet)
+    );
+
     const timestamp = nowIso();
     const syllabusRecord = normalizeRecord({
-      id: randomUUID(),
+      id: existingSyllabus?.id ?? randomUUID(),
       subject_id: subject.id,
       subjectId: subject.id,
       faculty_id: canonicalFacultyId,
       facultyId: canonicalFacultyId,
       ...syllabusData,
-      created_at: timestamp,
+      created_at: existingSyllabus?.created_at ?? existingSyllabus?.createdAt ?? timestamp,
       updated_at: timestamp,
-      createdAt: timestamp,
+      createdAt: existingSyllabus?.createdAt ?? existingSyllabus?.created_at ?? timestamp,
       updatedAt: timestamp,
     });
 
-    db.syllabi = [...(db.syllabi ?? []), syllabusRecord];
+    if (existingSyllabus) {
+      db.syllabi = allSyllabi.map((record) =>
+        String(record.id) === String(existingSyllabus.id) ? syllabusRecord : record
+      );
+    } else {
+      db.syllabi = [...allSyllabi, syllabusRecord];
+    }
+
     await saveDb(db);
     return syllabusRecord;
   });

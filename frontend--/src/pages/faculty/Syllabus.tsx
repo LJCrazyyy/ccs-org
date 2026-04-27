@@ -66,7 +66,11 @@ export const FacultySyllabus: React.FC = () => {
         const response = await fetchFacultyEndpoint(`/faculty/${user.id}/syllabi`);
         if (!response.ok) throw new Error('Failed to fetch syllabi');
         const data: Syllabus[] = await response.json();
-        setSyllabi(data);
+        // Deduplicate syllabi by ID to prevent React key errors
+        const uniqueSyllabi = data.filter(
+          (syllabus, index, self) => index === self.findIndex((s) => s.id === syllabus.id)
+        );
+        setSyllabi(uniqueSyllabi);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error loading syllabi');

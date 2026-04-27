@@ -320,22 +320,29 @@ const registerRoleFeatureRoutes = (appInstance) => {
         continue;
       }
 
-      register.call(appInstance, feature.path, async (request, response) => {
-        try {
-          const result = await handler(request);
-          const status = result?.status ?? 200;
+      const paths = [feature.path];
+      if (!feature.path.startsWith('/api')) {
+        paths.push(`/api${feature.path}`);
+      }
 
-          if (status === 204) {
-            response.status(204).send();
-            return;
+      for (const routePath of paths) {
+        register.call(appInstance, routePath, async (request, response) => {
+          try {
+            const result = await handler(request);
+            const status = result?.status ?? 200;
+
+            if (status === 204) {
+              response.status(204).send();
+              return;
+            }
+
+            response.status(status).json(result?.body ?? null);
+          } catch (error) {
+            console.error(`[role-features] Handler failed for ${feature.key}`, error);
+            response.status(500).json({ message: 'Internal server error' });
           }
-
-          response.status(status).json(result?.body ?? null);
-        } catch (error) {
-          console.error(`[role-features] Handler failed for ${feature.key}`, error);
-          response.status(500).json({ message: 'Internal server error' });
-        }
-      });
+        });
+      }
     }
   }
 
