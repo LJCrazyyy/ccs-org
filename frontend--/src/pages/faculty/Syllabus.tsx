@@ -66,6 +66,7 @@ export const FacultySyllabus: React.FC = () => {
       }
     };
 
+    
     fetchSyllabi();
   }, [user?.id]);
 
