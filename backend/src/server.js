@@ -362,7 +362,12 @@ const registerRoleFeatureRoutes = (appInstance) => {
 const app = express();
 const port = Number.parseInt(process.env.PORT ?? '8080', 10);
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://your-netlify-site.netlify.app"
+  ]
+}));
 app.use(express.json());
 
 app.get('/health', (_request, response) => {
@@ -465,11 +470,11 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('[unhandledRejection]', reason);
 });
 
-// Aggressive keep-alive
-const keepAlive = setInterval(() => {
-  // This keeps the event loop alive forever
-}, 1000);
-keepAlive.unref();
+// // Aggressive keep-alive
+// const keepAlive = setInterval(() => {
+//   // This keeps the event loop alive forever
+// }, 1000);
+// keepAlive.unref();
 
 // Find an available port if 8080 is busy
 const startServer = (tryPort) => {

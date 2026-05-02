@@ -16,8 +16,12 @@ service cloud.firestore {
 
     // User profiles: owners can access their own profile; admins can access all.
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) || isAdmin();
+      // Allow any authenticated user to read user profiles during development
+      // (previously only owners or admins could read). This relaxes access
+      // for UI components that fetch the current user's profile. Writes
+      // (update/delete) remain restricted to the owner or admin.
+      allow read: if isSignedIn() || isOwner(userId) || isAdmin();
+      allow create: if isSignedIn() || isOwner(userId) || isAdmin();
       allow update, delete: if isOwner(userId) || isAdmin();
     }
 
