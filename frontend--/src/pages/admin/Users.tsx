@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserX } from 'lucide-react';
 import { Card, SectionHeader, LoadingSpinner, ErrorMessage, SuccessMessage } from '../../components/ui/shared';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+import { apiUrl } from '../../lib/api';
 
 interface User {
   id: string;
@@ -37,7 +36,7 @@ export const AdminUsers: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/admin/users/admins`);
+      const response = await fetch(apiUrl('/api/admin/users/admins'));
       if (!response.ok) {
         const message = await response.text();
         throw new Error(message || 'Failed to fetch admin users');
@@ -62,7 +61,7 @@ export const AdminUsers: React.FC = () => {
 
     try {
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/api/auth/create-admin`, {
+      const response = await fetch(apiUrl('/api/auth/create-admin'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

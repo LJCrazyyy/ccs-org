@@ -16,8 +16,9 @@ import {
 } from 'firebase/firestore';
 
 const API_BASE = getApiBase();
-const isDemoBypassEnabled =
-  Boolean(import.meta.env.DEV) && String(import.meta.env.VITE_BYPASS_AUTH_DEMO ?? 'true').toLowerCase() !== 'false';
+// Disable demo bypass in production builds — only allow in non-production modes
+const isProdBuild = (import.meta.env.MODE && String(import.meta.env.MODE) === 'production') || Boolean(import.meta.env.PROD);
+const isDemoBypassEnabled = !isProdBuild && String(import.meta.env.VITE_BYPASS_AUTH_DEMO ?? 'false').toLowerCase() !== 'false';
 
 const demoCollections = {
   students: [

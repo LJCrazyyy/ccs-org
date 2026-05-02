@@ -9,8 +9,7 @@ import { db } from '../../lib/firebase';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { LoadingSpinner, ErrorMessage, EmptyState, FormInput, SectionHeader, Pagination, Card } from '../../components/ui/shared';
 import { emitSyncEvent } from '../../lib/syncEvents';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+import { apiUrl } from '../../lib/api';
 
 interface Faculty {
   id: string | number;
@@ -224,7 +223,7 @@ export const AdminFaculty: React.FC = () => {
         emitSyncEvent('facultyUpdated', { id: editingId, ...cleaned }, 'Faculty');
         alert('Faculty updated successfully!');
       } else {
-        const response = await fetch(`${API_BASE_URL}/api/auth/create-faculty`, {
+        const response = await fetch(apiUrl('/api/auth/create-faculty'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

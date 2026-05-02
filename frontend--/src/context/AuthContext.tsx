@@ -50,6 +50,9 @@ const firebaseConfig: FirebaseOptions = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
+// Determine if this is a production build. In production we force demo bypass off
+const isProdBuild = (import.meta.env.MODE && String(import.meta.env.MODE) === 'production') || Boolean(import.meta.env.PROD);
+
 const secondaryApp =
   getApps().find((app) => app.name === 'signup-user-creator') ||
   initializeApp(firebaseConfig, 'signup-user-creator');
@@ -146,10 +149,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<void> => {
     try {
       setError(null);
-      // Demo bypass for local quick-login (DEV only)
-      const bypassDemo = String(import.meta.env.VITE_BYPASS_AUTH_DEMO ?? 'true').toLowerCase() !== 'false';
-      const isDev = Boolean(import.meta.env.DEV);
-      if (isDev && bypassDemo) {
+      // Demo bypass can be enabled in any environment with VITE_BYPASS_AUTH_DEMO.
+      const bypassDemo = !isProdBuild && String(import.meta.env.VITE_BYPASS_AUTH_DEMO ?? 'false').toLowerCase() !== 'false';
+      if (bypassDemo) {
         console.log('[AUTH] Demo bypass active - setting fake user for', email);
         const signedInEmail = email || '';
         const detectedRole = getUserRoleFromEmail(signedInEmail);
