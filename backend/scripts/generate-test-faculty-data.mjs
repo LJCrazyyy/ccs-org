@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
+import '../src/firestore.js';
+import admin from 'firebase-admin';
+
 import { loadDbFromFirestore, saveDbToFirestore } from './firestore-seed-utils.mjs';
 
 const TARGET_FACULTY = 30;
@@ -65,6 +68,24 @@ const qualifications = [
 
 const nowIso = () => new Date().toISOString();
 
+const ensureAuthUser = async ({ uid, email, password, displayName }) => {
+  try {
+    await admin.auth().getUser(uid);
+    return;
+  } catch (error) {
+    if (error?.code !== 'auth/user-not-found') {
+      throw error;
+    }
+  }
+
+  await admin.auth().createUser({
+    uid,
+    email,
+    password,
+    displayName,
+  });
+};
+
 const buildFacultyRecord = (index) => {
   const [firstName, lastName] = names[(index - 1) % names.length];
   const department = departments[(index - 1) % departments.length];
@@ -129,6 +150,15 @@ const main = async () => {
   db.users = [...preservedUsers, ...generated.map((entry) => entry.user)];
 
   await saveDbToFirestore(db);
+
+  for (const facultyRecord of db.faculties) {
+    await ensureAuthUser({
+      uid: String(facultyRecord.id),
+      email: String(facultyRecord.email).trim().toLowerCase(),
+      password: PASSWORD,
+      displayName: String(facultyRecord.name),
+    });
+  }
 
   console.log(`[seed] Preserved ${preservedFaculties.length} existing faculty records.`);
   console.log(`[seed] Added ${generated.length} seeded faculty accounts.`);
