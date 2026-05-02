@@ -48,6 +48,11 @@ import {
   updateStudentProfile,
   updateStudentResearchStatus,
 } from './store-services/studentService.js';
+import {
+  createStudentUser,
+  createAdminUser,
+  createFacultyUser,
+} from './store-services/authService.js';
 import { roleFeatures } from './role-features/index.js';
 
 const storeExports = {
@@ -411,6 +416,37 @@ app.get('/api/faculty/:facultyId/classes', async (request, response) => {
   } catch (error) {
     console.error('[facultyClassesApi] Failed to load classes', error);
     response.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// User creation endpoints
+app.post('/api/auth/create-student', async (request, response) => {
+  try {
+    const result = await createStudentUser(request.body);
+    response.status(201).json(result);
+  } catch (error) {
+    console.error('[createStudent] Error:', error);
+    response.status(400).json({ message: error.message || 'Failed to create student' });
+  }
+});
+
+app.post('/api/auth/create-admin', async (request, response) => {
+  try {
+    const result = await createAdminUser(request.body);
+    response.status(201).json(result);
+  } catch (error) {
+    console.error('[createAdmin] Error:', error);
+    response.status(400).json({ message: error.message || 'Failed to create admin' });
+  }
+});
+
+app.post('/api/auth/create-faculty', async (request, response) => {
+  try {
+    const result = await createFacultyUser(request.body);
+    response.status(201).json(result);
+  } catch (error) {
+    console.error('[createFaculty] Error:', error);
+    response.status(400).json({ message: error.message || 'Failed to create faculty' });
   }
 });
 

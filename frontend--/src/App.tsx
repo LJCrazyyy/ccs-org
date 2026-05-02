@@ -2,7 +2,10 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Login } from './pages/Login';
+import { RoleSelection } from './pages/RoleSelection';
+import { StudentLogin } from './pages/StudentLogin';
+import { FacultyLogin } from './pages/FacultyLogin';
+import { AdminLogin } from './pages/AdminLogin';
 import { firebaseInitError } from './lib/firebase';
 
 // Admin Pages
@@ -68,8 +71,14 @@ export const App: React.FC = () => {
     >
       <AuthProvider>
         <Routes>
-          {/* Login Route */}
-          <Route path="/" element={<Login />} />
+          {/* Default Route: Role Selection */}
+          <Route path="/" element={<RoleSelection />} />
+          <Route path="/role-selection" element={<RoleSelection />} />
+          
+          {/* Role-Based Login Routes */}
+          <Route path="/student-login" element={<StudentLogin />} />
+          <Route path="/faculty-login" element={<FacultyLogin />} />
+          <Route path="/admin-login" element={<AdminLogin />} />
 
           {/* Admin Routes */}
           <Route

@@ -16,6 +16,160 @@ import {
 } from 'firebase/firestore';
 
 const API_BASE = getApiBase();
+const isDemoBypassEnabled =
+  Boolean(import.meta.env.DEV) && String(import.meta.env.VITE_BYPASS_AUTH_DEMO ?? 'true').toLowerCase() !== 'false';
+
+const demoCollections = {
+  students: [
+    {
+      id: 'student-demo',
+      name: 'Juan Dela Cruz',
+      email: 'student@school.com',
+      idNumber: 'STU-2026-0001',
+      year: '1st Year',
+      program: 'BSIT',
+      department: 'Computer Studies',
+      enrolled_classes: ['course-demo-1'],
+    },
+    {
+      id: 'student-demo-2',
+      name: 'Ana Reyes',
+      email: 'ana.reyes@school.com',
+      idNumber: 'STU-2026-0002',
+      year: '2nd Year',
+      program: 'BSCS',
+      department: 'Computer Studies',
+      enrolled_classes: ['course-demo-1'],
+    },
+  ],
+  faculties: [
+    {
+      id: 'faculty-demo',
+      name: 'Maria Santos',
+      email: 'faculty.test@school.com',
+      department: 'Computer Studies',
+      specialization: 'Web Development',
+      phone: '09170000003',
+      qualifications: 'MSIT',
+    },
+    {
+      id: 'faculty-demo-2',
+      name: 'Jose Cruz',
+      email: 'jose.cruz@school.com',
+      department: 'Computer Studies',
+      specialization: 'Database Systems',
+      phone: '09170000005',
+      qualifications: 'MIT',
+    },
+  ],
+  courses: [
+    {
+      id: 'course-demo-1',
+      code: 'IT101',
+      name: 'Introduction to Computing',
+      semester: '1st',
+      school_year: '2026-2027',
+      faculty_id: 'faculty-demo',
+    },
+    {
+      id: 'course-demo-2',
+      code: 'CS102',
+      name: 'Programming Fundamentals',
+      semester: '1st',
+      school_year: '2026-2027',
+      faculty_id: 'faculty-demo-2',
+    },
+  ],
+  subjects: [
+    {
+      id: 'subject-demo-1',
+      code: 'IT101',
+      name: 'Introduction to Computing',
+      semester: '1st',
+      facultyId: 'faculty-demo',
+    },
+  ],
+  schedules: [
+    {
+      id: 'course-demo-1',
+      courseCode: 'IT101',
+      courseName: 'Introduction to Computing',
+      section: 'A',
+      semester: '1st',
+      yearLevel: '1st',
+      schedule: 'Mon/Wed 9:00 AM - 10:30 AM',
+      room: 'Lab 1',
+      units: 3,
+      faculty_id: 'faculty-demo',
+      students: 2,
+      student_ids: ['student-demo', 'student-demo-2'],
+      type: 'lecture',
+    },
+  ],
+  events: [
+    {
+      id: 'event-demo-1',
+      title: 'Welcome Orientation',
+      date: '2026-05-08',
+      time: '9:00 AM',
+      location: 'Auditorium',
+      description: 'Demo event',
+      faculties: ['faculty-demo'],
+      attendees: ['faculty-demo'],
+    },
+  ],
+  announcements: [
+    {
+      id: 'ann-demo-1',
+      title: 'Welcome to the portal',
+      message: 'Demo announcement',
+      createdAt: '2026-05-01T00:00:00',
+    },
+  ],
+  research: [
+    {
+      id: 'research-demo-1',
+      title: 'Capstone Demo Study',
+      students: ['student-demo'],
+      advisers: ['faculty-demo'],
+      panelMembers: ['faculty-demo-2'],
+      description: 'Demo research entry',
+    },
+  ],
+  syllabi: [
+    {
+      id: 'syllabus-demo-1',
+      facultyId: 'faculty-demo',
+      title: 'IT101 Syllabus',
+      status: 'published',
+    },
+  ],
+  grades: [
+    {
+      id: 'grade-demo-1',
+      studentId: 'student-demo',
+      classId: 'course-demo-1',
+      attendance: 95,
+      activity: 92,
+      exam: 90,
+    },
+  ],
+  disciplineRecords: [
+    {
+      id: 'disc-demo-1',
+      studentId: 'student-demo',
+      email: 'student@school.com',
+      incident_type: 'minor',
+      description: 'Initial discipline note',
+    },
+  ],
+};
+
+const cloneDemo = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
+const demoCollection = (name: keyof typeof demoCollections) => cloneDemo(demoCollections[name]);
+const demoDoc = (name: keyof typeof demoCollections, id: string) =>
+  demoCollection(name).find((item: Record<string, any>) => String(item.id) === String(id)) || null;
 
 const requireDb = () => {
   if (!db) {
@@ -46,6 +200,31 @@ const normalizeScheduleClass = async (scheduleDoc: any) => {
   return {
     id: String(schedule.id),
     classId: String(schedule.id),
+    courseCode: schedule.courseCode || schedule.subjectCode || schedule.code || '',
+    courseName: schedule.courseName || schedule.subjectName || schedule.name || '',
+    section: schedule.section || '',
+    semester: schedule.semester || schedule.term || '',
+    yearLevel: schedule.yearLevel || schedule.year_level || '',
+    schedule: formatScheduleTime(schedule),
+    room: schedule.room || '',
+    units: Number(schedule.units || schedule.credits || 3),
+    type: schedule.type || '',
+    materials: Array.isArray(schedule.materials) ? schedule.materials : [],
+    quizzes: Array.isArray(schedule.quizzes) ? schedule.quizzes : [],
+    exams: Array.isArray(schedule.exams) ? schedule.exams : [],
+    activities: Array.isArray(schedule.activities) ? schedule.activities : [],
+    facultyId: schedule.faculty_id || schedule.facultyId || '',
+    faculty: schedule.facultyName || schedule.faculty || '',
+    description: schedule.description || '',
+  };
+};
+
+const normalizeScheduleRecord = (schedule: Record<string, any>) => {
+  const id = String(schedule.id || '');
+
+  return {
+    id,
+    classId: id,
     courseCode: schedule.courseCode || schedule.subjectCode || schedule.code || '',
     courseName: schedule.courseName || schedule.subjectName || schedule.name || '',
     section: schedule.section || '',
@@ -143,6 +322,26 @@ const normalizeSyllabusRecord = (syllabusDoc: any) => {
 };
 
 const buildStudentSchedulePayload = async (studentId: string) => {
+  if (isDemoBypassEnabled) {
+    const student = demoDoc('students', studentId) || demoDoc('students', 'student-demo');
+    if (!student) return null;
+
+    const enrolledClassIds = Array.isArray(student.enrolled_classes)
+      ? student.enrolled_classes.map((classId: any) => String(classId))
+      : [];
+
+    const enrolledClasses = enrolledClassIds
+      .map((classId) => demoDoc('schedules', classId))
+      .filter(Boolean)
+      .map((schedule) => normalizeScheduleRecord(schedule as Record<string, any>));
+
+    return {
+      studentId,
+      enrolledClasses,
+      totalCourses: enrolledClasses.length,
+    };
+  }
+
   const firestoreDb = requireDb();
   const studentSnapshot = await getDoc(doc(firestoreDb, 'students', studentId));
 
@@ -173,6 +372,25 @@ const buildStudentSchedulePayload = async (studentId: string) => {
 };
 
 const buildScheduleDetails = async (studentId: string, classId: string) => {
+  if (isDemoBypassEnabled) {
+    const student = demoDoc('students', studentId) || demoDoc('students', 'student-demo');
+    const schedule = demoDoc('schedules', classId);
+    if (!student || !schedule) return null;
+
+    const normalizedSchedule = normalizeScheduleRecord(schedule);
+    return {
+      ...normalizedSchedule,
+      description: schedule.description || '',
+      faculty: schedule.facultyName || schedule.faculty || '',
+      materials: Array.isArray(schedule.materials) ? schedule.materials : [],
+      assessments: {
+        quizzes: Array.isArray(schedule.quizzes) ? schedule.quizzes : [],
+        exams: Array.isArray(schedule.exams) ? schedule.exams : [],
+        activities: Array.isArray(schedule.activities) ? schedule.activities : [],
+      },
+    };
+  }
+
   const firestoreDb = requireDb();
   const studentSnapshot = await getDoc(doc(firestoreDb, 'students', studentId));
   if (!studentSnapshot.exists()) return null;
@@ -342,17 +560,68 @@ export const batchWrite = async (
 
 export const studentDB = {
   getStudent: async (studentId: string) => {
+    if (isDemoBypassEnabled) {
+      return demoDoc('students', studentId) || demoDoc('students', 'student-demo');
+    }
     const firestoreDb = requireDb();
     const studentSnapshot = await getDoc(doc(firestoreDb, 'students', studentId));
     if (!studentSnapshot.exists()) return null;
     return { id: studentSnapshot.id, ...(studentSnapshot.data() as Record<string, any>) } as any;
   },
   getAllStudents: async () => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('students');
+    }
     const firestoreDb = requireDb();
     const snapshot = await getDocs(collection(firestoreDb, 'students'));
     return snapshot.docs.map((docItem) => ({ id: docItem.id, ...(docItem.data() as Record<string, any>) }));
   },
   getStudentGrades: async (studentId: string, term = 'all') => {
+    if (isDemoBypassEnabled) {
+      const studentGrades = demoCollection('grades')
+        .filter((grade) => String(grade.studentId || grade.student_id || '').trim() === String(studentId).trim());
+      const allSchedules = demoCollection('schedules');
+      const allCourses = demoCollection('courses');
+
+      const gradesWithCourseInfo = studentGrades.map((grade) => {
+        const classId = String(grade.classId || grade.class_id || '');
+        const schedule = allSchedules.find((s) => String(s.id) === classId);
+        const courseId = String(schedule?.course_id || schedule?.courseId || '');
+        const course = allCourses.find((c) => String(c.id) === courseId);
+        const attendance = Number(grade.attendance ?? 0);
+        const activity = Number(grade.activity ?? 0);
+        const exam = Number(grade.exam ?? 0);
+        const totalGrade = Math.round((attendance * 0.1 + activity * 0.4 + exam * 0.5) * 100) / 100;
+
+        return {
+          gradeId: String(grade.id),
+          classId,
+          courseCode: course?.code || schedule?.courseCode || schedule?.subjectCode || 'Unknown',
+          courseName: course?.name || schedule?.courseName || schedule?.subjectName || 'Unknown',
+          term: schedule?.term || schedule?.semester || 'N/A',
+          attendance,
+          activity,
+          exam,
+          totalGrade,
+        };
+      });
+
+      const filteredGrades =
+        term !== 'all'
+          ? gradesWithCourseInfo.filter((grade) => String(grade.term) === String(term))
+          : gradesWithCourseInfo;
+
+      const totalGrades = filteredGrades.reduce((sum, grade) => sum + grade.totalGrade, 0);
+      const gwa = filteredGrades.length > 0 ? Math.round((totalGrades / filteredGrades.length) * 100) / 100 : 0;
+
+      return {
+        studentId,
+        grades: filteredGrades,
+        gwa,
+        totalCourses: filteredGrades.length,
+      };
+    }
+
     const firestoreDb = requireDb();
     const [gradesSnapshot, scheduleSnapshot, courseSnapshot] = await Promise.all([
       getDocs(collection(firestoreDb, 'grades')),
@@ -415,6 +684,14 @@ export const studentDB = {
     };
   },
   getStudentEvents: async (studentId: string) => {
+    if (isDemoBypassEnabled) {
+      const student = demoDoc('students', studentId) || demoDoc('students', 'student-demo');
+      const registeredEvents = Array.isArray(student?.registered_events) ? student.registered_events : [];
+      return demoCollection('events').map((event) => ({
+        ...event,
+        isRegistered: registeredEvents.includes(event.id),
+      }));
+    }
     const firestoreDb = requireDb();
     const [studentSnapshot, eventsSnapshot] = await Promise.all([
       getDoc(doc(firestoreDb, 'students', studentId)),
@@ -464,6 +741,11 @@ export const studentDB = {
     return { studentId, eventId };
   },
   getStudentResearch: async (studentId: string) => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('research').filter((research) =>
+        Array.isArray(research.students) && research.students.some((recordStudentId) => String(recordStudentId) === String(studentId))
+      );
+    }
     const firestoreDb = requireDb();
     const researchSnapshot = await getDocs(collection(firestoreDb, 'research'));
 
@@ -486,6 +768,13 @@ export const studentDB = {
   updateStudent: (studentId: string, data: any) => updateDocument('students', studentId, data),
   deleteStudent: (studentId: string) => deleteDocument('students', studentId),
   getDisciplineRecords: async (params?: { studentId?: string; email?: string }) => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('disciplineRecords').filter((record) =>
+        (!params?.studentId || String(record.studentId || '') === String(params.studentId)) &&
+        (!params?.email || String(record.email || '') === String(params.email))
+      );
+    }
+
     const firestoreDb = requireDb();
     let recordsQuery = query(collection(firestoreDb, 'disciplineRecords'));
 
@@ -507,12 +796,18 @@ export const studentDB = {
 
 export const facultyDB = {
   getFaculty: async (facultyId: string) => {
+    if (isDemoBypassEnabled) {
+      return demoDoc('faculties', facultyId) || demoDoc('faculties', 'faculty-demo');
+    }
     const firestoreDb = requireDb();
     const facultySnapshot = await getDoc(doc(firestoreDb, 'faculties', facultyId));
     if (!facultySnapshot.exists()) return null;
     return { id: facultySnapshot.id, ...(facultySnapshot.data() as Record<string, any>) } as any;
   },
   getAllFaculty: async () => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('faculties');
+    }
     const firestoreDb = requireDb();
     const snapshot = await getDocs(collection(firestoreDb, 'faculties'));
     return snapshot.docs.map((docItem) => ({ id: docItem.id, ...(docItem.data() as Record<string, any>) }));
@@ -542,6 +837,12 @@ export const facultyDB = {
       body: JSON.stringify(payload),
     }),
   getFacultyEvents: async (facultyId: string) => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('events').filter((event) =>
+        String(event.facultyId || event.faculty_id || '') === String(facultyId) ||
+        (Array.isArray(event.attendees) && event.attendees.some((id: any) => String(id) === String(facultyId)))
+      );
+    }
     const firestoreDb = requireDb();
     const snapshot = await getDocs(collection(firestoreDb, 'events'));
 
@@ -633,6 +934,18 @@ export const facultyDB = {
     };
   },
   getClassStudents: async (classId: string) => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('students')
+        .filter((student) => Array.isArray(student.enrolled_classes) && student.enrolled_classes.includes(classId))
+        .map((student) => ({
+          id: student.id,
+          name: student.name || `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || student.email || student.id,
+          email: student.email || '',
+          yearLevel: student.yearLevel || student.year_level || '',
+          department: student.department || '',
+        }));
+    }
+
     const firestoreDb = requireDb();
     try {
       const studentsQuery = query(
@@ -665,6 +978,58 @@ export const facultyDB = {
     }
   },
   getFacultyGradeEntry: async (facultyId: string, classId: string) => {
+    if (isDemoBypassEnabled) {
+      const schedule = demoDoc('schedules', classId);
+      if (!schedule) return null;
+
+      if (String(schedule.faculty_id || schedule.facultyId || '') !== String(facultyId)) {
+        return null;
+      }
+
+      const classSchedule = normalizeScheduleRecord(schedule);
+      const allStudents = demoCollection('students');
+      const allGrades = demoCollection('grades');
+
+      const studentGrades = allStudents
+        .filter((student) => Array.isArray(student.enrolled_classes) && student.enrolled_classes.includes(classId))
+        .map((student) => {
+          const studentGradeRecords = allGrades.filter(
+            (grade) =>
+              String(grade.studentId || grade.student_id || '') === String(student.id) &&
+              String(grade.classId || grade.class_id || '') === String(classId)
+          );
+
+          const gradeData = studentGradeRecords.reduce(
+            (acc, grade) => {
+              acc.attendance = acc.attendance || Number(grade.attendance || 0);
+              acc.activity = acc.activity || Number(grade.activity || 0);
+              acc.exam = acc.exam || Number(grade.exam || 0);
+              return acc;
+            },
+            { attendance: 0, activity: 0, exam: 0 }
+          );
+
+          const totalGrade = gradeData.attendance * 0.1 + gradeData.activity * 0.4 + gradeData.exam * 0.5;
+          return {
+            studentId: student.id,
+            studentName: student.name || `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || student.email || student.id,
+            email: student.email || '',
+            yearLevel: student.yearLevel || student.year_level || '',
+            department: student.department || '',
+            attendance: gradeData.attendance,
+            activity: gradeData.activity,
+            exam: gradeData.exam,
+            totalGrade: Math.round(totalGrade * 100) / 100,
+          };
+        });
+
+      return {
+        classId,
+        classSchedule,
+        studentGrades,
+      };
+    }
+
     const firestoreDb = requireDb();
     const scheduleRef = doc(firestoreDb, 'schedules', classId);
     const scheduleSnapshot = await getDoc(scheduleRef);
@@ -724,6 +1089,21 @@ export const facultyDB = {
     };
   },
   saveFacultyClassGrades: async (facultyId: string, classId: string, gradesData: any[]) => {
+    if (isDemoBypassEnabled) {
+      return gradesData.map((gradeEntry) => ({
+        id: `demo-grade-${gradeEntry.studentId}`,
+        studentId: gradeEntry.studentId,
+        student_id: gradeEntry.studentId,
+        classId,
+        class_id: classId,
+        attendance: gradeEntry.attendance ?? 0,
+        activity: gradeEntry.activity ?? 0,
+        exam: gradeEntry.exam ?? 0,
+        updatedAt: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+    }
+
     const firestoreDb = requireDb();
     const gradeCollection = collection(firestoreDb, 'grades');
     const gradeSnapshot = await getDocs(gradeCollection);
@@ -766,6 +1146,63 @@ export const facultyDB = {
     return updatedGrades;
   },
   getFacultyTeachingLoad: async (facultyId: string) => {
+    if (isDemoBypassEnabled) {
+      const allCourses = demoCollection('courses');
+      const facultyClasses = demoCollection('schedules').filter((schedule) => String(schedule.faculty_id || schedule.facultyId || '') === String(facultyId));
+
+      let totalLectureHours = 0;
+      let totalLabHours = 0;
+      let totalTeachingHours = 0;
+      let totalStudents = 0;
+
+      const classes = facultyClasses.map((cls) => {
+        const course = allCourses.find((course) => String(course.id) === String(cls.course_id || cls.courseId));
+        const classType = String(cls.type || course?.type || 'lecture').toLowerCase();
+        const units = Number(cls.units ?? course?.units ?? 3);
+
+        let lectureHours = 0;
+        let labHours = 0;
+        if (classType === 'lecture-only') {
+          lectureHours = 3;
+        } else if (classType === 'lecture-lab') {
+          lectureHours = 2;
+          labHours = 3;
+        } else if (classType === 'lab-only') {
+          labHours = 3;
+        } else {
+          lectureHours = 3;
+        }
+
+        totalLectureHours += lectureHours;
+        totalLabHours += labHours;
+        totalTeachingHours += lectureHours + labHours;
+        totalStudents += Number(cls.students ?? 0);
+
+        return {
+          id: cls.id,
+          code: course?.code ?? cls.code ?? cls.courseCode ?? cls.subjectCode ?? '',
+          name: course?.name ?? cls.name ?? cls.courseName ?? cls.subjectName ?? '',
+          section: cls.section || '',
+          type: classType,
+          units,
+          lectureHours,
+          labHours,
+          totalHours: lectureHours + labHours,
+          students: Number(cls.students ?? 0),
+        };
+      });
+
+      return {
+        facultyId,
+        classes,
+        totalClasses: classes.length,
+        totalStudents,
+        totalLectureHours,
+        totalLabHours,
+        totalTeachingHours,
+      };
+    }
+
     const firestoreDb = requireDb();
     const scheduleSnapshot = await getDocs(collection(firestoreDb, 'schedules'));
     const courseSnapshot = await getDocs(collection(firestoreDb, 'courses'));
@@ -829,6 +1266,34 @@ export const facultyDB = {
     };
   },
   getFacultyResearch: async (facultyId: string) => {
+    if (isDemoBypassEnabled) {
+      const allStudents = demoCollection('students');
+
+      return demoCollection('research')
+        .filter((research) => {
+          const panelMembers = Array.isArray(research.panelMembers) ? research.panelMembers : [];
+          const advisers = Array.isArray(research.advisers) ? research.advisers : [];
+
+          return (
+            panelMembers.some((id: any) => String(id) === String(facultyId)) ||
+            advisers.some((id: any) => String(id) === String(facultyId))
+          );
+        })
+        .map((research) => {
+          const studentIds = Array.isArray(research.students) ? research.students : [];
+          const researchStudents = studentIds.map((studentId: any) => {
+            const student = allStudents.find((s) => String(s.id) === String(studentId));
+            return student || { id: studentId, name: 'Unknown', email: '' };
+          });
+
+          return {
+            ...research,
+            students: researchStudents,
+            studentCount: researchStudents.length,
+          };
+        });
+    }
+
     const firestoreDb = requireDb();
     const [researchSnapshot, studentSnapshot] = await Promise.all([
       getDocs(collection(firestoreDb, 'research')),
@@ -867,6 +1332,35 @@ export const facultyDB = {
       });
   },
   getFacultyResearchDetails: async (facultyId: string, researchId: string) => {
+    if (isDemoBypassEnabled) {
+      const research = demoDoc('research', researchId);
+      if (!research) return null;
+
+      const panelMembers = Array.isArray(research.panelMembers) ? research.panelMembers : [];
+      const advisers = Array.isArray(research.advisers) ? research.advisers : [];
+
+      const isFacultyInvolved =
+        panelMembers.some((id: any) => String(id) === String(facultyId)) ||
+        advisers.some((id: any) => String(id) === String(facultyId));
+
+      if (!isFacultyInvolved) return null;
+
+      const allStudents = demoCollection('students');
+      const studentIds = Array.isArray(research.students) ? research.students : [];
+      const researchStudents = studentIds.map((studentId: any) => {
+        const student = allStudents.find((s) => String(s.id) === String(studentId));
+        return student || { id: studentId, name: 'Unknown', email: '' };
+      });
+
+      return {
+        ...research,
+        students: researchStudents,
+        panel_members: panelMembers,
+        advisers,
+        details: research.description || research.abstract || '',
+      };
+    }
+
     const firestoreDb = requireDb();
     const researchRef = doc(firestoreDb, 'research', researchId);
     const researchSnapshot = await getDoc(researchRef);
@@ -903,6 +1397,10 @@ export const facultyDB = {
     };
   },
   getFacultySyllabi: async (facultyId: string) => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('syllabi').filter((syllabus) => String(syllabus.facultyId || syllabus.faculty_id || '') === String(facultyId));
+    }
+
     const firestoreDb = requireDb();
     const snapshot = await getDocs(collection(firestoreDb, 'syllabi'));
     return snapshot.docs
@@ -943,6 +1441,20 @@ export const facultyDB = {
     return true;
   },
   getFacultyClasses: async (facultyId: string) => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('schedules')
+        .filter((schedule) => String(schedule.faculty_id || schedule.facultyId || '') === String(facultyId))
+        .map((schedule) => ({
+          id: schedule.id,
+          courseCode: schedule.courseCode || schedule.subjectCode || schedule.code || '',
+          courseName: schedule.courseName || schedule.subjectName || schedule.name || '',
+          section: schedule.section || '',
+          students: Number(schedule.students || 0),
+          schedule: schedule.schedule || schedule.time || '',
+          facultyId: schedule.faculty_id || schedule.facultyId || '',
+        }));
+    }
+
     const firestoreDb = requireDb();
     const snapshot = await getDocs(collection(firestoreDb, 'schedules'));
     const classes = await Promise.all(
@@ -957,6 +1469,22 @@ export const facultyDB = {
     return classes;
   },
   getFacultyDashboard: async (facultyId: string) => {
+    if (isDemoBypassEnabled) {
+      const faculty = demoDoc('faculties', facultyId) || demoDoc('faculties', 'faculty-demo') || { id: facultyId, name: '', email: '' };
+      const subjects = demoCollection('subjects').filter((subject) => String(subject.facultyId || '') === String(faculty.id)).map((subject) => ({
+        id: subject.id,
+        name: subject.name || '',
+        code: subject.code || '',
+        classes: demoCollection('schedules').filter((schedule) => String(schedule.faculty_id || schedule.facultyId || '') === String(faculty.id)).length,
+      }));
+      const classes = demoCollection('schedules').filter((schedule) => String(schedule.faculty_id || schedule.facultyId || '') === String(faculty.id));
+      return {
+        faculty,
+        subjects,
+        totalClasses: classes.length,
+        totalStudents: classes.reduce((count, cls) => count + Number(cls.students || 0), 0),
+      };
+    }
     const firestoreDb = requireDb();
     const [facultySnapshot, subjectSnapshot, scheduleSnapshot, researchSnapshot] = await Promise.all([
       getDoc(doc(firestoreDb, 'faculties', facultyId)),
@@ -1030,6 +1558,9 @@ export const adminDB = {
 
 export const coursesDB = {
   getCourse: async (courseId: string) => {
+    if (isDemoBypassEnabled) {
+      return demoDoc('subjects', courseId) || demoDoc('courses', courseId);
+    }
     const firestoreDb = requireDb();
     const subjectSnapshot = await getDoc(doc(firestoreDb, 'subjects', courseId));
     if (subjectSnapshot.exists()) {
@@ -1042,6 +1573,9 @@ export const coursesDB = {
     return null;
   },
   getAllCourses: async () => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('subjects').length > 0 ? demoCollection('subjects') : demoCollection('courses');
+    }
     const firestoreDb = requireDb();
     const [subjectsSnapshot, coursesSnapshot] = await Promise.all([
       getDocs(collection(firestoreDb, 'subjects')),
@@ -1084,12 +1618,18 @@ export const gradesDB = {
 
 export const schedulesDB = {
   getSchedule: async (scheduleId: string) => {
+    if (isDemoBypassEnabled) {
+      return demoDoc('schedules', scheduleId);
+    }
     const firestoreDb = requireDb();
     const scheduleSnapshot = await getDoc(doc(firestoreDb, 'schedules', scheduleId));
     if (!scheduleSnapshot.exists()) return null;
     return { id: scheduleSnapshot.id, ...(scheduleSnapshot.data() as Record<string, any>) };
   },
   getAllSchedules: async () => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('schedules');
+    }
     const firestoreDb = requireDb();
     const snapshot = await getDocs(collection(firestoreDb, 'schedules'));
     return snapshot.docs.map((docItem) => ({ id: docItem.id, ...(docItem.data() as Record<string, any>) }));
@@ -1150,24 +1690,24 @@ export const schedulesDB = {
 };
 
 export const eventsDB = {
-  getEvent: (eventId: string) => getDocument('events', eventId),
-  getAllEvents: () => getCollection('events'),
+  getEvent: (eventId: string) => (isDemoBypassEnabled ? Promise.resolve(demoDoc('events', eventId)) : getDocument('events', eventId)),
+  getAllEvents: () => (isDemoBypassEnabled ? Promise.resolve(demoCollection('events')) : getCollection('events')),
   addEvent: (data: any) => addDocument('events', data),
   updateEvent: (eventId: string, data: any) => updateDocument('events', eventId, data),
   deleteEvent: (eventId: string) => deleteDocument('events', eventId),
 };
 
 export const researchDB = {
-  getResearch: (researchId: string) => getDocument('research', researchId),
-  getAllResearch: () => getCollection('research'),
+  getResearch: (researchId: string) => (isDemoBypassEnabled ? Promise.resolve(demoDoc('research', researchId)) : getDocument('research', researchId)),
+  getAllResearch: () => (isDemoBypassEnabled ? Promise.resolve(demoCollection('research')) : getCollection('research')),
   addResearch: (data: any) => addDocument('research', data),
   updateResearch: (researchId: string, data: any) => updateDocument('research', researchId, data),
   deleteResearch: (researchId: string) => deleteDocument('research', researchId),
 };
 
 export const announcementsDB = {
-  getAnnouncement: (announcementId: string) => getDocument('announcements', announcementId),
-  getAllAnnouncements: () => getCollection('announcements'),
+  getAnnouncement: (announcementId: string) => (isDemoBypassEnabled ? Promise.resolve(demoDoc('announcements', announcementId)) : getDocument('announcements', announcementId)),
+  getAllAnnouncements: () => (isDemoBypassEnabled ? Promise.resolve(demoCollection('announcements')) : getCollection('announcements')),
   addAnnouncement: (data: any) => addDocument('announcements', data),
   updateAnnouncement: (announcementId: string, data: any) =>
     updateDocument('announcements', announcementId, data),
@@ -1176,8 +1716,18 @@ export const announcementsDB = {
 
 export const guidanceDB = {
   getStudentDisciplineRecords: (studentId?: string, email?: string) =>
-    studentDB.getDisciplineRecords({ studentId, email }),
+    (isDemoBypassEnabled
+      ? Promise.resolve(
+          demoCollection('disciplineRecords').filter((record) =>
+            (!studentId || String(record.studentId || '') === String(studentId)) &&
+            (!email || String(record.email || '') === String(email))
+          )
+        )
+      : studentDB.getDisciplineRecords({ studentId, email })),
   getAllDisciplineRecords: async () => {
+    if (isDemoBypassEnabled) {
+      return demoCollection('disciplineRecords');
+    }
     const firestoreDb = requireDb();
     const snapshot = await getDocs(collection(firestoreDb, 'disciplineRecords'));
     return snapshot.docs.map((docItem) => ({ id: docItem.id, ...(docItem.data() as Record<string, any>) }));

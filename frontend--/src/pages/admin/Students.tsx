@@ -9,6 +9,8 @@ import { doc, setDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { FormInput, SectionHeader, Card } from '../../components/ui/shared';
 import { emitSyncEvent } from '../../lib/syncEvents';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+
 // Setup secondary Firebase app for student account creation
 const firebaseConfig: FirebaseOptions = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -317,9 +319,24 @@ export const AdminStudents: React.FC = () => {
       } else {
         // CREATE OPERATION
         console.log('[STUDENT] Creating new student account:', normalizedEmail);
-        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, normalizedEmail, normalizedPassword);
-        const uid = userCredential.user.uid;
-        console.log('[STUDENT] Firebase Auth created, UID:', uid);
+        const createResponse = await fetch(`${API_BASE_URL}/api/auth/create-student`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: normalizedName,
+            email: normalizedEmail,
+            password: normalizedPassword,
+            ...cleanedDataToSave,
+          }),
+        });
+
+        if (!createResponse.ok) {
+          const errorData = await createResponse.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Failed to create student user');
+        }
+
+        const { uid } = await createResponse.json();
+        console.log('[STUDENT] Backend created user with UID:', uid);
 
         const userData = {
           ...cleanedDataToSave,
@@ -328,9 +345,6 @@ export const AdminStudents: React.FC = () => {
           createdAt: new Date().toISOString(),
         };
 
-        console.log('[STUDENT] Saving Firestore user document');
-        await setDoc(doc(db, 'users', uid), userData);
-        
         console.log('[STUDENT] Adding to student database');
         await studentDB.addStudent(userData);
 

@@ -1,26 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { UserX } from 'lucide-react';
-import { createUserWithEmailAndPassword, getAuth as getAuthFromApp } from 'firebase/auth';
-import { initializeApp, getApps, type FirebaseOptions } from 'firebase/app';
-import { collection, getDocs, query, where, doc, setDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { Card, SectionHeader, LoadingSpinner, ErrorMessage, SuccessMessage } from '../../components/ui/shared';
 
-const firebaseConfig: FirebaseOptions = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
-};
-
-const secondaryApp =
-  getApps().find((app) => app.name === 'admin-user-creator') ||
-  initializeApp(firebaseConfig, 'admin-user-creator');
-
-const secondaryAuth = getAuthFromApp(secondaryApp);
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
 
 interface User {
   id: string;
@@ -55,16 +37,14 @@ export const AdminUsers: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      if (!db) {
-        throw new Error('Database is not initialized.');
+      const response = await fetch(`${API_BASE_URL}/api/admin/users/admins`);
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Failed to fetch admin users');
       }
-      const usersQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
-      const snapshot = await getDocs(usersQuery);
-      const adminUsers = snapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...(docSnapshot.data() as Omit<User, 'id'>),
-      }));
-      setUsers(adminUsers);
+
+      const adminUsers = await response.json();
+      setUsers(Array.isArray(adminUsers) ? adminUsers : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch users');
     } finally {
@@ -82,23 +62,29 @@ export const AdminUsers: React.FC = () => {
 
     try {
       setError(null);
-      if (!db) {
-        throw new Error('Database is not initialized.');
+      const response = await fetch(`${API_BASE_URL}/api/auth/create-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+        }),
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Failed to create admin user');
       }
-      const userCredential = await createUserWithEmailAndPassword(
-        secondaryAuth,
-        formData.email.trim().toLowerCase(),
-        formData.password
-      );
-      const uid = userCredential.user.uid;
+
+      const createdAdmin = await response.json();
       const userData: User = {
-        id: uid,
+        id: createdAdmin.uid,
         name: formData.name.trim(),
         email: formData.email.trim().toLowerCase(),
         role: 'admin',
         createdAt: new Date().toISOString(),
       };
-      await setDoc(doc(db, 'users', uid), userData);
       setSuccess('Admin created successfully. Use these credentials to sign in.');
       setShowForm(false);
       resetForm();

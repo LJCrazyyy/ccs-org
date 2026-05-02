@@ -5,11 +5,12 @@ import { useForm } from '../../hooks/useAsync';
 import { useSearch } from '../../hooks/useAsync';
 import { usePagination } from '../../hooks/useAsync';
 import { facultyDB, studentDB, coursesDB, eventsDB } from '../../lib/database';
-import { auth, db } from '../../lib/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { db } from '../../lib/firebase';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { LoadingSpinner, ErrorMessage, EmptyState, FormInput, SectionHeader, Pagination, Card } from '../../components/ui/shared';
 import { emitSyncEvent } from '../../lib/syncEvents';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
 
 interface Faculty {
   id: string | number;
@@ -187,8 +188,8 @@ export const AdminFaculty: React.FC = () => {
       return;
     }
 
-    if (!db || !auth) {
-      alert('Authentication or database is not initialized.');
+    if (!db) {
+      alert('Database is not initialized.');
       return;
     }
 
@@ -223,8 +224,28 @@ export const AdminFaculty: React.FC = () => {
         emitSyncEvent('facultyUpdated', { id: editingId, ...cleaned }, 'Faculty');
         alert('Faculty updated successfully!');
       } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, cleaned.email, normalizedPassword);
-        const uid = userCredential.user.uid;
+        const response = await fetch(`${API_BASE_URL}/api/auth/create-faculty`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: cleaned.name,
+            email: cleaned.email,
+            password: normalizedPassword,
+            department: cleaned.department,
+            specialization: cleaned.specialization,
+            phone: cleaned.phone,
+            office: cleaned.office,
+            qualifications: cleaned.qualifications,
+          }),
+        });
+
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || 'Failed to create faculty user');
+        }
+
+        const createdFaculty = await response.json();
+        const uid = createdFaculty.uid;
 
         const facultyPayload = {
           ...cleaned,
@@ -233,7 +254,6 @@ export const AdminFaculty: React.FC = () => {
           createdAt: new Date().toISOString(),
         };
 
-        await setDoc(doc(db, 'users', uid), facultyPayload);
         await facultyDB.addFaculty(facultyPayload);
 
         const newFaculty: Faculty = {

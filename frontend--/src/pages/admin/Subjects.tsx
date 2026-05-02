@@ -52,6 +52,8 @@ export const AdminSubjects: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
   const [formData, setFormData] = useState<SubjectFormData>({
     name: '',
     code: '',
@@ -184,6 +186,13 @@ export const AdminSubjects: React.FC = () => {
     const matchesYear = yearFilter === 'All' || subject.yearLevel === yearFilter;
     return matchesDepartment && matchesYear;
   });
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [departmentFilter, yearFilter, filteredSubjects.length]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredSubjects.length / rowsPerPage));
+  const currentPageSubjects = filteredSubjects.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
   const departmentStats = filteredSubjects.reduce<Record<string, number>>((acc, subject) => {
     acc[subject.department] = (acc[subject.department] || 0) + 1;
@@ -470,7 +479,7 @@ export const AdminSubjects: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredSubjects.map((subject) => (
+              {currentPageSubjects.map((subject) => (
                 <tr key={subject.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{subject.code}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{subject.name}</td>
@@ -508,12 +517,52 @@ export const AdminSubjects: React.FC = () => {
             </tbody>
           </table>
 
-          {filteredSubjects.length === 0 && (
+          {currentPageSubjects.length === 0 && (
             <div className="text-center py-12">
               <BookOpen size={48} className="mx-auto text-gray-400 mb-4" />
               <p className="text-gray-600">No subjects found for the selected filters</p>
             </div>
           )}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3 text-sm text-gray-700">
+            <span>Rows per page:</span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            >
+              {[5, 10, 20, 50].map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 text-sm text-gray-700 md:justify-end">
+            <span>
+              Page {currentPage} of {pageCount}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-gray-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, pageCount))}
+                disabled={currentPage === pageCount}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-gray-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </Card>
     </div>

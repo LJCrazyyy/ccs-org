@@ -221,20 +221,26 @@ export const StudentDashboard: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {upcomingEvents.map((activity: Event) => (
               <div key={activity.id} className="p-3 bg-gray-50 rounded-lg">
+                {(() => {
+                  const normalizedType = String(activity.type || 'event').trim();
+                  const badgeClass =
+                    normalizedType === 'exam' ? 'bg-red-100 text-red-800' :
+                    normalizedType === 'quiz' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-green-100 text-green-800';
+
+                  return (
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-semibold text-gray-800">{activity.title}</p>
-                    <p className="text-sm text-gray-600">{activity.type}</p>
+                    <p className="text-sm text-gray-600">{normalizedType}</p>
                     <p className="text-xs text-gray-500">{new Date(activity.date).toLocaleDateString()}</p>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-bold ${
-                    activity.type === 'exam' ? 'bg-red-100 text-red-800' :
-                    activity.type === 'quiz' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-green-100 text-green-800'
-                  }`}>
-                    {activity.type.toUpperCase()}
-                  </span>
-                </div>
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${badgeClass}`}>
+                      {normalizedType.toUpperCase()}
+                    </span>
+                  </div>
+                  );
+                })()}
               </div>
             ))}
           </div>

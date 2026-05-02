@@ -146,6 +146,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<void> => {
     try {
       setError(null);
+      // Demo bypass for local quick-login (DEV only)
+      const bypassDemo = String(import.meta.env.VITE_BYPASS_AUTH_DEMO ?? 'true').toLowerCase() !== 'false';
+      const isDev = Boolean(import.meta.env.DEV);
+      if (isDev && bypassDemo) {
+        console.log('[AUTH] Demo bypass active - setting fake user for', email);
+        const signedInEmail = email || '';
+        const detectedRole = getUserRoleFromEmail(signedInEmail);
+        const fakeFirebaseUser = { uid: signedInEmail, email: signedInEmail, displayName: signedInEmail.split('@')[0] } as any;
+        setFirebaseUser(fakeFirebaseUser);
+        const fallbackUser: User = {
+          id: signedInEmail,
+          name: fakeFirebaseUser.displayName || signedInEmail.split('@')[0] || 'User',
+          email: signedInEmail,
+          role: detectedRole,
+        };
+        setUser(fallbackUser);
+        return;
+      }
+
       if (firebaseInitError) {
         throw firebaseInitError;
       }

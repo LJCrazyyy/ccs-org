@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
 
-// Map Firebase error codes to user-friendly messages
 const getErrorMessage = (errorCode: string): string => {
   const errorMap: Record<string, string> = {
     'auth/invalid-email': 'Please enter a valid email address',
@@ -19,25 +18,28 @@ const getErrorMessage = (errorCode: string): string => {
   return errorMap[errorCode] || 'Login failed. Please check your email and password.';
 };
 
-export const Login: React.FC = () => {
+interface StudentLoginProps {
+  role: 'student' | 'faculty' | 'admin';
+  roleLabel: string;
+}
+
+export const RoleBasedLogin: React.FC<StudentLoginProps> = ({ role, roleLabel }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [generalError, setGeneralError] = useState('');
   
-  // Destructured login and auth states
   const { login, isLoading: authLoading, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect to role selection when user logs in
   useEffect(() => {
     if (isAuthenticated && user && !authLoading) {
-      navigate(`/role-selection`, { replace: true });
+      const nextPath = role === 'admin' ? '/dashboard/admin/subjects' : `/dashboard/${role}`;
+      navigate(nextPath, { replace: true });
     }
-  }, [isAuthenticated, user, authLoading, navigate]);
+  }, [isAuthenticated, user, authLoading, navigate, role]);
 
-  // Email validation logic
   const validateEmail = (value: string): string => {
     if (!value.trim()) return 'Email is required';
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -45,7 +47,6 @@ export const Login: React.FC = () => {
     return '';
   };
 
-  // Password validation logic
   const validatePassword = (value: string): string => {
     if (!value) return 'Password is required';
     if (value.length < 6) return 'Password must be at least 6 characters';
@@ -55,7 +56,7 @@ export const Login: React.FC = () => {
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setEmail(value);
-    setGeneralError(''); 
+    setGeneralError('');
     setEmailError('');
   };
 
@@ -77,7 +78,7 @@ export const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError('');
-    
+
     const emailErr = validateEmail(email);
     const passwordErr = validatePassword(password);
 
@@ -94,15 +95,32 @@ export const Login: React.FC = () => {
       const errorCode = err?.code || '';
       const errorMsg = err?.message || 'Login failed. Please check your email and password.';
       const resolvedMessage = errorCode ? getErrorMessage(errorCode) : errorMsg;
-      
+
       console.error('[LOGIN] Form login error:', { code: errorCode, message: errorMsg });
+      setGeneralError(resolvedMessage);
+    }
+  };
+
+  const quickLogin = async (credentials: { email: string; password: string }) => {
+    setGeneralError('');
+    setEmailError('');
+    setPasswordError('');
+    try {
+      console.log('[LOGIN] Quick login attempt for:', credentials.email);
+      await login(credentials.email.trim(), credentials.password);
+    } catch (err: any) {
+      const errorCode = err?.code || '';
+      const errorMsg = err?.message || 'Login failed. Please check your email and password.';
+      const resolvedMessage = errorCode ? getErrorMessage(errorCode) : errorMsg;
+
+      console.error('[LOGIN] Quick login error:', { code: errorCode, message: errorMsg, email: credentials.email });
       setGeneralError(resolvedMessage);
     }
   };
 
   if (authLoading) {
     return (
-      <div className="min-h-screen gradient-bg flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-white via-orange-50 to-orange-100 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-orange-700 font-medium">Signing in...</p>
@@ -114,26 +132,20 @@ export const Login: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-orange-50 to-orange-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        <button
+          onClick={() => navigate('/role-selection')}
+          className="mb-6 flex items-center gap-2 text-orange-700 hover:text-orange-900 font-medium transition"
+        >
+          <ArrowLeft size={20} />
+          Back to Roles
+        </button>
+
         <div className="text-center mb-8">
-          <div className="flex justify-center gap-4 mb-4">
-            <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-rglFWmLitQbBPWPvlaUmQHDHI2YiM8.png"
-              alt="University of Cabuyao"
-              className="h-16 w-16 rounded-full shadow-lg border-2 border-orange-300"
-            />
-            <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-JiGNt42HwaPEYoifHlLe8u2pfYzP0m.png"
-              alt="College of Computing Studies"
-              className="h-16 w-16 rounded-full shadow-lg border-2 border-orange-300"
-            />
-          </div>
-          <h1 className="text-3xl font-bold text-orange-900 mb-2">Academic Management System</h1>
-          <p className="text-orange-700 font-medium">Pamantasan ng Cabuyao</p>
+          <h1 className="text-3xl font-bold text-orange-900 mb-2">{roleLabel} Login</h1>
+          <p className="text-orange-700">Sign in to your {roleLabel.toLowerCase()} account</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8 mb-6 border border-orange-100">
-          <h2 className="text-2xl font-bold text-orange-900 mb-6">Sign In</h2>
-
           {generalError && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
               <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={18} />
@@ -155,7 +167,7 @@ export const Login: React.FC = () => {
                 className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 outline-none transition ${
                   emailError ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-orange-200 focus:ring-orange-300 focus:border-orange-400'
                 }`}
-                placeholder="student@example.com"
+                placeholder="your.email@example.com"
               />
               {emailError && (
                 <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
@@ -186,11 +198,27 @@ export const Login: React.FC = () => {
             <button
               type="submit"
               disabled={authLoading}
-              className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold py-2.5 rounded-lg transition-colors mt-4 disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold py-3 rounded-lg transition-colors mt-4 disabled:opacity-50"
             >
               Sign In
             </button>
           </form>
+        </div>
+
+        {/* Demo Accounts Section */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 border border-orange-100">
+          <h3 className="text-sm font-semibold text-orange-900 mb-4 text-center uppercase tracking-wider">Demo {roleLabel} Account</h3>
+          <button
+            onClick={() =>
+              quickLogin({
+                email: role === 'student' ? 'student@example.com' : role === 'faculty' ? 'faculty@example.com' : 'admin@example.com',
+                password: role === 'student' ? 'student123' : role === 'faculty' ? 'faculty123' : 'admin123',
+              })
+            }
+            className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-2.5 rounded-lg text-sm font-medium transition shadow-md hover:shadow-lg transform hover:scale-105"
+          >
+            Quick {roleLabel} Login
+          </button>
         </div>
       </div>
     </div>
