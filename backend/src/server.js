@@ -52,6 +52,7 @@ import {
   createStudentUser,
   createAdminUser,
   createFacultyUser,
+  loginUser,
 } from './store-services/authService.js';
 import { roleFeatures } from './role-features/index.js';
 
@@ -452,6 +453,16 @@ app.post('/api/auth/create-faculty', async (request, response) => {
   } catch (error) {
     console.error('[createFaculty] Error:', error);
     response.status(400).json({ message: error.message || 'Failed to create faculty' });
+  }
+});
+
+app.post('/api/auth/login', async (request, response) => {
+  try {
+    const result = await loginUser(request.body);
+    response.status(200).json(result);
+  } catch (error) {
+    console.error('[login] Error:', error);
+    response.status(401).json({ message: error.message || 'Invalid email or password' });
   }
 });
 

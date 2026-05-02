@@ -215,8 +215,8 @@ export const RoleBasedLogin: React.FC<StudentLoginProps> = ({ role, roleLabel })
           <button
             onClick={() =>
               quickLogin({
-                email: role === 'student' ? 'student@example.com' : role === 'faculty' ? 'faculty@example.com' : 'admin@example.com',
-                password: role === 'student' ? 'student123' : role === 'faculty' ? 'faculty123' : 'admin123',
+                  email: role === 'student' ? 'student@school.com' : role === 'faculty' ? 'faculty.test@school.com' : 'admin@school.com',
+                  password: role === 'student' ? 'studentpass123' : role === 'faculty' ? 'facultypass123' : 'adminpass123',
               })
             }
             className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-2.5 rounded-lg text-sm font-medium transition shadow-md hover:shadow-lg transform hover:scale-105"

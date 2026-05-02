@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   User as FirebaseUser,
   createUserWithEmailAndPassword,
+  signInWithCustomToken,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -11,6 +12,7 @@ import {
 } from 'firebase/auth';
 import { initializeApp, getApps, type FirebaseOptions } from 'firebase/app';
 import { auth, db, firebaseInitError } from '../lib/firebase';
+import { getApiBase } from '../lib/api-base';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export type UserRole = 'admin' | 'student' | 'faculty';
@@ -58,6 +60,7 @@ const secondaryApp =
   initializeApp(firebaseConfig, 'signup-user-creator');
 
 const secondaryAuth = getAuthFromApp(secondaryApp);
+const API_BASE = getApiBase();
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -172,9 +175,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       console.log('[AUTH] Attempting login for:', email);
-      
+
+      try {
+        const backendResponse = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+
+        if (backendResponse.ok) {
+          const backendData = await backendResponse.json();
+          if (backendData?.token) {
+            const result = await signInWithCustomToken(auth!, backendData.token);
+            console.log('[AUTH] Backend custom-token login successful for:', email, 'UID:', result.user.uid);
+
+            const signedInEmail = result.user.email || '';
+            const detectedRole = getUserRoleFromEmail(signedInEmail);
+
+            if (db) {
+              try {
+                const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+                if (userDoc.exists()) {
+                  const userData = userDoc.data() as User;
+                  console.log('[AUTH] Found Firestore user doc, using stored data:', userData);
+                  setUser(userData);
+                  return;
+                }
+              } catch (dbErr) {
+                console.warn('[AUTH] Error fetching Firestore doc after custom-token login:', dbErr);
+              }
+            }
+
+            setUser({
+              id: result.user.uid,
+              name: result.user.displayName || signedInEmail.split('@')[0] || 'User',
+              email: signedInEmail,
+              role: detectedRole,
+              photoURL: result.user.photoURL || undefined,
+            });
+            return;
+          }
+        }
+      } catch (backendErr) {
+        console.warn('[AUTH] Backend login fallback unavailable, trying Firebase email/password auth:', backendErr);
+      }
+
       const result = await signInWithEmailAndPassword(auth!, email.trim(), password);
-      console.log('[AUTH] Login successful for:', email, 'UID:', result.user.uid);
+      console.log('[AUTH] Firebase email/password login successful for:', email, 'UID:', result.user.uid);
       
       const signedInEmail = result.user.email || '';
       const detectedRole = getUserRoleFromEmail(signedInEmail);

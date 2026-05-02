@@ -9,19 +9,18 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function hasRole(role) {
+      return isSignedIn() && request.auth.token.role == role;
+    }
+
     function isAdmin() {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return hasRole('admin');
     }
 
     // User profiles: owners can access their own profile; admins can access all.
     match /users/{userId} {
-      // Allow any authenticated user to read user profiles during development
-      // (previously only owners or admins could read). This relaxes access
-      // for UI components that fetch the current user's profile. Writes
-      // (update/delete) remain restricted to the owner or admin.
-      allow read: if isSignedIn() || isOwner(userId) || isAdmin();
-      allow create: if isSignedIn() || isOwner(userId) || isAdmin();
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
       allow update, delete: if isOwner(userId) || isAdmin();
     }
 
