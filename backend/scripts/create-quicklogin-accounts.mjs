@@ -6,6 +6,9 @@
  */
 
 import { loadDbFromFirestore, saveDbToFirestore } from './firestore-seed-utils.mjs';
+// Ensure Firebase Admin SDK is initialized so we can create Auth users
+import '../src/firestore.js';
+import admin from 'firebase-admin';
 
 // Generate UUID
 function generateId() {
@@ -74,6 +77,23 @@ async function createQuickLoginAccounts() {
     };
     
     db.users.push(newUser);
+    // Also ensure a corresponding Firebase Auth user exists with the same uid
+    try {
+      const authUser = await admin.auth().getUser(userId).catch(() => null);
+      if (!authUser) {
+        await admin.auth().createUser({
+          uid: userId,
+          email: account.email,
+          password: account.password,
+          displayName: account.name,
+        });
+        console.log(`   🔐 Created Firebase Auth user for: ${account.email}`);
+      } else {
+        console.log(`   🔐 Firebase Auth user already exists for UID: ${userId}`);
+      }
+    } catch (authErr) {
+      console.warn(`   ⚠️ Failed to create Firebase Auth user for ${account.email}:`, authErr.message || authErr);
+    }
     
     // Create role-specific profile
     if (account.role === 'student') {
